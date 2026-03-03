@@ -20,10 +20,10 @@ jobs:
           path: wled-bambu
 
       # ── 2. Clone WLED source ───────────────────────────────────────────────
-      - name: Clone WLED 0.14 source
+      - name: Clone WLED 0.15 source
         run: |
-          git clone --depth 1 --branch 0.14.0 \
-            https://github.com/Aircoookie/WLED.git wled-src
+          git clone --depth 1 --branch v0.15.0-b6 \
+            https://github.com/wled/WLED.git wled-src
 
       # ── 3. Inject our custom files into WLED src ──────────────────────────
       - name: Inject P1S files into WLED
