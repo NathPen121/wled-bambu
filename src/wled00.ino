@@ -1,26 +1,28 @@
 /*
- * WLED-Bambu — Bambu Lab Printer Status LED Controller
- * Drop this folder into your WLED fork and build with PlatformIO.
+ * WLED Bambu — Bambu Lab Printer Status LED Controller
  *
- * This file replaces (or supplements) wled00.ino in the WLED src/ folder.
- * If WLED's wled00.ino already exists, add the three Bambu calls shown below
- * into the existing setup() and loop() functions instead.
+ * Integration hooks for WLED. The patch_wled.py script adds these calls
+ * into wled_main.cpp automatically during the GitHub Actions build.
+ *
+ * If integrating manually, add to wled_main.cpp:
+ *   In setup(): setupBambuWebRoutes(); loadDefaultBambuEffects();
+ *   In loop():  pollBambu(); applyBambuEffects();
  */
 
 #include "wled.h"
 #include "bambu_status.h"
-#include "wled_bambu_server.cpp"  // pulls in the web routes
 
-// ── Arduino entry points ──────────────────────────────────────────────────────
+// These are only used if this file IS the main sketch entry point.
+// In normal WLED builds, patch_wled.py injects the calls into wled_main.cpp instead.
 
 void setup() {
-  WLED::instance().setup();   // standard WLED init (WiFi, LED strip, web server, etc.)
-  setupBambuWebRoutes();         // register /bambu/* endpoints
-  loadDefaultBambuEffects();     // load saved config from SPIFFS
+  WLED::instance().setup();
+  setupBambuWebRoutes();
+  loadDefaultBambuEffects();
 }
 
 void loop() {
-  WLED::instance().loop();    // standard WLED loop (effects, OTA, etc.)
-  pollBambu();                   // check printer state every 2 s
-  applyBambuEffects();           // push state → LED effect
+  WLED::instance().loop();
+  pollBambu();
+  applyBambuEffects();
 }

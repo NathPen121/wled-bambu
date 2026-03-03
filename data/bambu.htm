@@ -51,7 +51,7 @@
   <h2>Printer Connection</h2>
   <div class="row">
     <label>Printer IP</label>
-    <input type="text" id="printer_ip" placeholder="192.168.1.x">
+    <input type="text" id="bambu_ip" placeholder="192.168.1.x">
   </div>
   <div class="row">
     <label>Enabled</label>
@@ -111,7 +111,7 @@ async function loadConfig() {
   try {
     const r = await fetch('/bambu/status');
     config = await r.json();
-    document.getElementById('printer_ip').value = config.printer_ip || '';
+    document.getElementById('bambu_ip').value = config.ip || '';
     document.getElementById('enabled').checked  = config.enabled || false;
     const badge = document.getElementById('current_state');
     badge.textContent = config.state || 'idle';
@@ -175,7 +175,7 @@ async function saveConfig() {
   });
 
   const payload = {
-    printer_ip: document.getElementById('printer_ip').value.trim(),
+    ip: document.getElementById('bambu_ip').value.trim(),
     enabled:    document.getElementById('enabled').checked,
     effects
   };
