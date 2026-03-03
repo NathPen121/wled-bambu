@@ -49,19 +49,18 @@ jobs:
       - name: Set up platformio_override.ini
         working-directory: wled-src
         run: |
+          # Use WLED's own esp32dev env exactly as-is, just set it as default
+          # and append our custom defines without touching any compiler flags
           cat > platformio_override.ini << 'EOF'
           [platformio]
           default_envs = esp32dev
 
           [env:esp32dev]
-          build_flags = ${common.build_flags} ${esp32_idf_V4.build_flags}
-            -D WLED_RELEASE_NAME="ESP32"
-            -DARDUINO_USB_CDC_ON_BOOT=0
+          build_flags = ${esp32_idf_V4.build_flags}
             -D LEDPIN=5
             -D BTNPIN=-1
             -D RLYPIN=-1
             -D IRPIN=-1
-            -D USERMOD_BAMBU_STATUS
           EOF
 
       - name: Set up Python
