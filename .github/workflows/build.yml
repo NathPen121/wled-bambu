@@ -1,0 +1,100 @@
+name: Build WLED-Bambu Firmware
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:   # allows manual trigger from GitHub UI
+
+jobs:
+  build:
+    name: Build ESP32 Firmware
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout this repo ──────────────────────────────────────────────
+      - name: Checkout WLED-Bambu
+        uses: actions/checkout@v4
+        with:
+          path: wled-bambu
+
+      # ── 2. Clone WLED source ───────────────────────────────────────────────
+      - name: Clone WLED 0.14 source
+        run: |
+          git clone --depth 1 --branch 0.14.0 \
+            https://github.com/Aircoookie/WLED.git wled-src
+
+      # ── 3. Inject our custom files into WLED src ──────────────────────────
+      - name: Inject P1S files into WLED
+        run: |
+          # Copy our source files into WLED's wled00 folder
+          cp wled-bambu/src/bambu_status.h        wled-src/wled00/
+          cp wled-bambu/src/bambu_status.cpp      wled-src/wled00/
+          cp wled-bambu/src/wled_bambu_server.cpp wled-src/wled00/
+
+          # Copy data (SPIFFS) files
+          mkdir -p wled-src/data
+          cp wled-bambu/data/bambu.htm            wled-src/data/
+          cp wled-bambu/data/bambu_default.json   wled-src/data/
+
+          # Copy platformio.ini
+          cp wled-bambu/platformio.ini          wled-src/platformio.ini
+
+          # Patch wled00.ino to include our hooks
+          python3 wled-bambu/tools/patch_wled.py wled-src/wled00/wled00.ino
+
+      # ── 4. Set up Python + PlatformIO ─────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      # ── 5. Cache PlatformIO packages ──────────────────────────────────────
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-pio-${{ hashFiles('wled-src/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-
+
+      # ── 6. Build ──────────────────────────────────────────────────────────
+      - name: Build firmware
+        working-directory: wled-src
+        run: pio run -e esp32dev
+
+      # ── 7. Upload .bin as artifact ────────────────────────────────────────
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WLED-Bambu-firmware
+          path: |
+            wled-src/.pio/build/esp32dev/firmware.bin
+            wled-src/.pio/build/esp32dev/partitions.bin
+          retention-days: 30
+
+      # ── 8. Create a GitHub Release on tag push ────────────────────────────
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            wled-src/.pio/build/esp32dev/firmware.bin
+            wled-src/.pio/build/esp32dev/partitions.bin
+          body: |
+            ## WLED-Bambu Firmware
+
+            Flash `firmware.bin` to your ESP32 using:
+            - **ESPHome Flasher** (easiest, GUI)
+            - **esptool.py**: `esptool.py --chip esp32 write_flash 0x10000 firmware.bin`
+            - **WLED web installer**: https://install.wled.me (use custom bin option)
+
+            After flashing, connect to the `WLED-AP` hotspot and go to `4.3.2.1`
+            to configure WiFi, then navigate to `http://<device-ip>/bambu` to set
+            your printer IP and per-state LED effects.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

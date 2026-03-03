@@ -1,0 +1,14 @@
+{
+  "p1s": {
+    "enabled": false,
+    "printer_ip": "",
+    "effects": {
+      "printing":    { "fx": 2,  "col": [255,255,255], "col2": [0,0,0],   "speed": 128, "intensity": 128, "duration": 0 },
+      "heating":     { "fx": 2,  "col": [255,120,0],   "col2": [0,0,0],   "speed": 200, "intensity": 200, "duration": 0 },
+      "cooling":     { "fx": 2,  "col": [0,50,255],    "col2": [0,0,0],   "speed": 100, "intensity": 100, "duration": 0 },
+      "idle":        { "fx": 0,  "col": [255,200,150],  "col2": [0,0,0],   "speed": 0,   "intensity": 0,   "duration": 0 },
+      "downloading": { "fx": 15, "col": [0,255,200],   "col2": [0,0,0],   "speed": 128, "intensity": 128, "duration": 0 },
+      "error":       { "fx": 2,  "col": [255,0,0],     "col2": [0,0,0],   "speed": 255, "intensity": 255, "duration": 0 }
+    }
+  }
+}

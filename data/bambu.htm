@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bambu LED Config</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+  h1 { color: #00d4ff; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 20px; }
+  .card { background: #16213e; border-radius: 10px; padding: 16px; margin-bottom: 16px; border: 1px solid #0f3460; }
+  .card h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #00d4ff; margin-bottom: 12px; }
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  label { font-size: 12px; color: #aaa; min-width: 80px; }
+  input[type=text], input[type=number], select {
+    background: #0f3460; border: 1px solid #1a6090; color: #eee;
+    border-radius: 6px; padding: 6px 10px; font-size: 13px; flex: 1; min-width: 80px;
+  }
+  input[type=color] { width: 44px; height: 34px; border: none; border-radius: 6px; cursor: pointer; padding: 2px; }
+  .state-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .state-card { background: #0f3460; border-radius: 8px; padding: 14px; border-left: 4px solid #00d4ff; }
+  .state-card h3 { font-size: 13px; text-transform: capitalize; margin-bottom: 10px; color: #00d4ff; }
+  .state-card.printing  { border-color: #ffffff; }
+  .state-card.heating   { border-color: #ff8c00; }
+  .state-card.cooling   { border-color: #0050ff; }
+  .state-card.idle      { border-color: #ffc864; }
+  .state-card.downloading { border-color: #00ffc8; }
+  .state-card.error     { border-color: #ff2020; }
+  button {
+    background: #00d4ff; color: #000; border: none; border-radius: 8px;
+    padding: 10px 24px; font-size: 14px; font-weight: bold; cursor: pointer; margin-top: 10px;
+  }
+  button:hover { background: #00b8d9; }
+  #status { margin-top: 12px; font-size: 13px; color: #0f0; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+  .badge.printing   { background:#fff;    color:#000; }
+  .badge.heating    { background:#ff8c00; color:#000; }
+  .badge.cooling    { background:#0050ff; color:#fff; }
+  .badge.idle       { background:#ffc864; color:#000; }
+  .badge.downloading{ background:#00ffc8; color:#000; }
+  .badge.error      { background:#ff2020; color:#fff; }
+</style>
+</head>
+<body>
+
+<h1>🖨️ Bambu LED Controller</h1>
+<p class="subtitle">WLED · Bambu Lab Bambu Status Integration</p>
+
+<div class="card">
+  <h2>Printer Connection</h2>
+  <div class="row">
+    <label>Printer IP</label>
+    <input type="text" id="printer_ip" placeholder="192.168.1.x">
+  </div>
+  <div class="row">
+    <label>Enabled</label>
+    <input type="checkbox" id="enabled" style="width:20px;height:20px;cursor:pointer;">
+  </div>
+  <div class="row">
+    <label>Current State</label>
+    <span id="current_state" class="badge idle">loading…</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>State Effects</h2>
+  <div class="state-grid" id="state_grid"></div>
+</div>
+
+<button onclick="saveConfig()">💾 Save & Apply</button>
+<div id="status"></div>
+
+<script>
+const STATES = ["printing","heating","cooling","idle","downloading","error"];
+const FX_OPTIONS = [
+  [0,"Solid"],[1,"Blink"],[2,"Breathe"],[3,"Wipe"],[4,"Wipe Random"],
+  [5,"Random Colors"],[6,"Sweep"],[7,"Dynamic"],[8,"Colorloop"],
+  [9,"Rainbow"],[10,"Scan"],[11,"Dual Scan"],[12,"Fade"],[13,"Theater"],
+  [14,"Theater Rainbow"],[15,"Running"],[16,"Saw"],[17,"Twinkle"],
+  [18,"Dissolve"],[19,"Dissolve Rnd"],[20,"Sparkle"],[21,"Sparkle Dark"],
+  [22,"Sparkle+"],[23,"Strobe"],[24,"Strobe Rainbow"],[25,"Multi Strobe"],
+  [26,"Blink Rainbow"],[27,"Android"],[28,"Chase"],[29,"Chase Random"],
+  [30,"Chase Rainbow"],[31,"Chase Flash"],[32,"Chase Flash Rnd"],
+  [33,"Rainbow Runner"],[34,"Colorful"],[35,"Traffic Light"],
+  [36,"Sweep Random"],[37,"Running 2"],[38,"Aurora"],[39,"Stream"],
+  [40,"Scanner"],[41,"Lighthouse"],[42,"Fireworks"],[43,"Rain"],
+  [44,"Merry Christmas"],[45,"Fire Flicker"],[46,"Gradient"],
+  [47,"Loading"],[48,"Police"],[49,"Police All"],[50,"Two Dots"],
+  [51,"Two Areas"],[52,"Circus"],[53,"Halloween"],[54,"Tri Chase"],
+  [55,"Tri Wipe"],[56,"Tri Fade"],[57,"Lightning"],[58,"ICU"],
+  [59,"Multi Comet"],[60,"Scanner Dual"],[61,"Stream 2"],[62,"Oscillate"],
+  [63,"Pride 2015"],[64,"Juggle"],[65,"Palette"],[66,"Fire 2012"],
+  [67,"Colorwaves"],[68,"BPM"],[69,"Fill Noise"],[70,"Noise 1"],
+  [71,"Noise 2"],[72,"Noise 3"],[73,"Noise 4"],[74,"Colortwinkles"],
+  [75,"Lake"],[76,"Meteor"],[77,"Meteor Smooth"],[78,"Railway"],
+  [79,"Ripple"],[80,"Twinklefox"],[81,"Twinklecat"],[82,"Halloween Eyes"],
+  [83,"Solid Pattern"],[84,"Solid Pattern Tri"],[85,"Spots"],
+  [86,"Spots Fade"],[87,"Glitter"],[88,"Candle"],[89,"Fireworks Starburst"],
+  [90,"Fireworks 1D"],[91,"Bouncing Balls"],[92,"Sinelon"],[93,"Sinelon Dual"],
+  [94,"Sinelon Rainbow"],[95,"Popcorn"],[96,"Drip"],[97,"Plasma"],
+  [98,"Percent"],[99,"Ripple Rainbow"],[100,"Heartbeat"],[101,"Pacifica"],
+  [102,"Candle Multi"],[103,"Solid Glitter"],[104,"Sunrise"],[105,"Phased"],
+  [106,"Twinkleup"],[107,"Noise Pal"],[108,"Sine"],[109,"Phased Noise"],
+  [110,"Flow"],[111,"Chunchun"],[112,"Dancing Shadows"],[113,"Washing Machine"]
+];
+
+let config = {};
+
+async function loadConfig() {
+  try {
+    const r = await fetch('/bambu/status');
+    config = await r.json();
+    document.getElementById('printer_ip').value = config.printer_ip || '';
+    document.getElementById('enabled').checked  = config.enabled || false;
+    const badge = document.getElementById('current_state');
+    badge.textContent = config.state || 'idle';
+    badge.className   = 'badge ' + (config.state || 'idle');
+    buildGrid();
+  } catch(e) {
+    document.getElementById('status').textContent = '⚠️ Could not reach device';
+  }
+}
+
+function buildGrid() {
+  const grid = document.getElementById('state_grid');
+  grid.innerHTML = '';
+  STATES.forEach(state => {
+    const e = (config.effects || {})[state] || {};
+    const col  = rgbToHex(e.col  || [255,255,255]);
+    const col2 = rgbToHex(e.col2 || [0,0,0]);
+
+    let fxOptions = FX_OPTIONS.map(([id,name]) =>
+      `<option value="${id}" ${e.fx == id ? 'selected' : ''}>${id}: ${name}</option>`
+    ).join('');
+
+    grid.innerHTML += `
+      <div class="state-card ${state}">
+        <h3>⬤ ${state}</h3>
+        <div class="row"><label>Effect</label>
+          <select id="${state}_fx">${fxOptions}</select></div>
+        <div class="row"><label>Color 1</label>
+          <input type="color" id="${state}_col" value="${col}"></div>
+        <div class="row"><label>Color 2</label>
+          <input type="color" id="${state}_col2" value="${col2}"></div>
+        <div class="row"><label>Speed</label>
+          <input type="number" id="${state}_speed" min="0" max="255" value="${e.speed ?? 128}"></div>
+        <div class="row"><label>Intensity</label>
+          <input type="number" id="${state}_intensity" min="0" max="255" value="${e.intensity ?? 128}"></div>
+      </div>`;
+  });
+}
+
+function rgbToHex(rgb) {
+  return '#' + rgb.map(v => v.toString(16).padStart(2,'0')).join('');
+}
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return [r,g,b];
+}
+
+async function saveConfig() {
+  const effects = {};
+  STATES.forEach(state => {
+    effects[state] = {
+      fx:        parseInt(document.getElementById(`${state}_fx`).value),
+      col:       hexToRgb(document.getElementById(`${state}_col`).value),
+      col2:      hexToRgb(document.getElementById(`${state}_col2`).value),
+      speed:     parseInt(document.getElementById(`${state}_speed`).value),
+      intensity: parseInt(document.getElementById(`${state}_intensity`).value),
+      duration:  0
+    };
+  });
+
+  const payload = {
+    printer_ip: document.getElementById('printer_ip').value.trim(),
+    enabled:    document.getElementById('enabled').checked,
+    effects
+  };
+
+  try {
+    const r = await fetch('/bambu/config', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const msg = await r.text();
+    document.getElementById('status').textContent = msg === 'OK'
+      ? '✅ Saved! Effects will update within 2 seconds.' : '⚠️ ' + msg;
+  } catch(e) {
+    document.getElementById('status').textContent = '❌ Save failed: ' + e;
+  }
+}
+
+// Poll state every 3s
+setInterval(async () => {
+  try {
+    const r = await fetch('/bambu/status');
+    const d = await r.json();
+    const badge = document.getElementById('current_state');
+    badge.textContent = d.state;
+    badge.className   = 'badge ' + d.state;
+  } catch(_) {}
+}, 3000);
+
+loadConfig();
+</script>
+</body>
+</html>
