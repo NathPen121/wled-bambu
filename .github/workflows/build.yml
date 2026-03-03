@@ -49,30 +49,27 @@ jobs:
       - name: Patch WLED platformio.ini
         working-directory: wled-src
         run: |
-          # 1. Remove unsupported -Wshadow flag from WLED's own ini
-          sed -i 's/-Wshadow=compatible-local//g' platformio.ini
-          # 2. Append our custom defines directly into the esp32dev section
-          #    using python to avoid any ini inheritance issues
           python3 - << 'PYEOF'
           import re
 
           with open('platformio.ini', 'r') as f:
               content = f.read()
 
-          extra = "\n  -D LEDPIN=5\n  -D BTNPIN=-1\n  -D RLYPIN=-1\n  -D IRPIN=-1"
+          # 1. Remove unsupported -Wshadow flag
+          content = content.replace('-Wshadow=compatible-local', '')
 
-          # Find the esp32dev build_flags and append to them
-          content = re.sub(
-              r'(\[env:esp32dev\].*?build_flags\s*=\s*)(.*?)(\n\[)',
-              lambda m: m.group(1) + m.group(2) + extra + '\n' + m.group(3),
-              content,
-              flags=re.DOTALL
-          )
+          # 2. Add ArduinoJson to the global lib_deps so our files can see it
+          #    WLED uses it internally but it needs to be explicit for our files
+          if 'bblanchon/ArduinoJson' not in content:
+              content = content.replace(
+                  'lib_compat_mode = strict',
+                  'lib_compat_mode = strict\nlib_deps =\n  bblanchon/ArduinoJson@^6.21.3'
+              )
 
           with open('platformio.ini', 'w') as f:
               f.write(content)
 
-          print("platformio.ini patched successfully")
+          print("platformio.ini patched OK")
           PYEOF
 
       - name: Set up Python
