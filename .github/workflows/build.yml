@@ -25,7 +25,12 @@ jobs:
           git clone --depth 1 --branch v0.15.0-b6 \
             https://github.com/wled/WLED.git wled-src
 
-      # ── 3. Inject our custom files into WLED ──────────────────────────────
+      # ── 3. Install Node dependencies for WLED build tools ─────────────────
+      - name: Install Node dependencies
+        working-directory: wled-src
+        run: npm install
+
+      # ── 4. Inject our custom files into WLED ──────────────────────────────
       - name: Inject Bambu files into WLED
         run: |
           # Copy source files into WLED's wled00 folder
@@ -33,28 +38,28 @@ jobs:
           cp wled-bambu/src/bambu_status.cpp        wled-src/wled00/
           cp wled-bambu/src/wled_bambu_server.cpp   wled-src/wled00/
 
-          # Copy data (SPIFFS) files
-          cp wled-bambu/data/bambu.htm              wled-src/wled00/data/ 2>/dev/null || \
-          cp wled-bambu/data/bambu.htm              wled-src/data/
-          cp wled-bambu/data/bambu_default.json     wled-src/wled00/data/ 2>/dev/null || \
-          cp wled-bambu/data/bambu_default.json     wled-src/data/
+          # Copy data files - try wled00/data first, fall back to root data/
+          if [ -d wled-src/wled00/data ]; then
+            cp wled-bambu/data/bambu.htm            wled-src/wled00/data/
+            cp wled-bambu/data/bambu_default.json   wled-src/wled00/data/
+          else
+            cp wled-bambu/data/bambu.htm            wled-src/data/
+            cp wled-bambu/data/bambu_default.json   wled-src/data/
+          fi
 
-          # Patch the WLED main file (works with both wled00.ino and wled_main.cpp)
+          # Patch wled_main.cpp or wled00.ino
           python3 wled-bambu/tools/patch_wled.py wled-src/wled00/
 
-          # Show what got patched
-          echo "--- wled00 directory contents ---"
-          ls wled-src/wled00/
+          echo "--- Injected files ---"
+          ls wled-src/wled00/ | grep bambu
 
-      # ── 4. Override platformio.ini ─────────────────────────────────────────
+      # ── 5. Add build flags via platformio_override.ini ────────────────────
       - name: Set up platformio_override.ini
+        working-directory: wled-src
         run: |
-          cat > wled-src/platformio_override.ini << 'EOF'
-          [platformio]
-          default_envs = esp32dev
-
+          cat > platformio_override.ini << 'EOF'
           [env:esp32dev]
-          build_flags = ${env.build_flags}
+          build_flags = ${common.build_flags} ${common.esp_build_flags}
             -D LEDPIN=5
             -D BTNPIN=-1
             -D RLYPIN=-1
@@ -62,7 +67,7 @@ jobs:
             -D USERMOD_BAMBU_STATUS
           EOF
 
-      # ── 5. Set up Python + PlatformIO ─────────────────────────────────────
+      # ── 6. Set up Python + PlatformIO ─────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -71,7 +76,7 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      # ── 6. Cache PlatformIO packages ──────────────────────────────────────
+      # ── 7. Cache PlatformIO packages ──────────────────────────────────────
       - name: Cache PlatformIO
         uses: actions/cache@v4
         with:
@@ -80,12 +85,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pio-
 
-      # ── 7. Build ──────────────────────────────────────────────────────────
+      # ── 8. Build ──────────────────────────────────────────────────────────
       - name: Build firmware
         working-directory: wled-src
         run: pio run -e esp32dev
 
-      # ── 8. Upload .bin as artifact ────────────────────────────────────────
+      # ── 9. Upload .bin as artifact ────────────────────────────────────────
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
@@ -95,7 +100,7 @@ jobs:
             wled-src/.pio/build/esp32dev/partitions.bin
           retention-days: 30
 
-      # ── 9. Create a GitHub Release on tag push ────────────────────────────
+      # ── 10. Create a GitHub Release on tag push ───────────────────────────
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
