@@ -13,53 +13,50 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ── 1. Checkout this repo ──────────────────────────────────────────────
       - name: Checkout WLED-Bambu
         uses: actions/checkout@v4
         with:
           path: wled-bambu
 
-      # ── 2. Clone WLED source ───────────────────────────────────────────────
       - name: Clone WLED 0.15 source
         run: |
           git clone --depth 1 --branch v0.15.0-b6 \
             https://github.com/wled/WLED.git wled-src
 
-      # ── 3. Install Node dependencies for WLED build tools ─────────────────
       - name: Install Node dependencies
         working-directory: wled-src
         run: npm install
 
-      # ── 4. Inject our custom files into WLED ──────────────────────────────
       - name: Inject Bambu files into WLED
         run: |
-          # Copy source files into WLED's wled00 folder
-          cp wled-bambu/src/bambu_status.h          wled-src/wled00/
-          cp wled-bambu/src/bambu_status.cpp        wled-src/wled00/
-          cp wled-bambu/src/wled_bambu_server.cpp   wled-src/wled00/
+          cp wled-bambu/src/bambu_status.h        wled-src/wled00/
+          cp wled-bambu/src/bambu_status.cpp      wled-src/wled00/
+          cp wled-bambu/src/wled_bambu_server.cpp wled-src/wled00/
 
-          # Copy data files - try wled00/data first, fall back to root data/
           if [ -d wled-src/wled00/data ]; then
-            cp wled-bambu/data/bambu.htm            wled-src/wled00/data/
-            cp wled-bambu/data/bambu_default.json   wled-src/wled00/data/
+            cp wled-bambu/data/bambu.htm           wled-src/wled00/data/
+            cp wled-bambu/data/bambu_default.json  wled-src/wled00/data/
           else
-            cp wled-bambu/data/bambu.htm            wled-src/data/
-            cp wled-bambu/data/bambu_default.json   wled-src/data/
+            cp wled-bambu/data/bambu.htm           wled-src/data/
+            cp wled-bambu/data/bambu_default.json  wled-src/data/
           fi
 
-          # Patch wled_main.cpp or wled00.ino
           python3 wled-bambu/tools/patch_wled.py wled-src/wled00/
 
-          echo "--- Injected files ---"
+          echo "--- Bambu files injected ---"
           ls wled-src/wled00/ | grep bambu
 
-      # ── 5. Add build flags via platformio_override.ini ────────────────────
       - name: Set up platformio_override.ini
         working-directory: wled-src
         run: |
           cat > platformio_override.ini << 'EOF'
+          [platformio]
+          default_envs = esp32dev
+
           [env:esp32dev]
-          build_flags = ${common.build_flags} ${common.esp_build_flags}
+          build_flags = ${common.build_flags} ${esp32_idf_V4.build_flags}
+            -D WLED_RELEASE_NAME="ESP32"
+            -DARDUINO_USB_CDC_ON_BOOT=0
             -D LEDPIN=5
             -D BTNPIN=-1
             -D RLYPIN=-1
@@ -67,7 +64,6 @@ jobs:
             -D USERMOD_BAMBU_STATUS
           EOF
 
-      # ── 6. Set up Python + PlatformIO ─────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -76,7 +72,6 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      # ── 7. Cache PlatformIO packages ──────────────────────────────────────
       - name: Cache PlatformIO
         uses: actions/cache@v4
         with:
@@ -85,12 +80,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pio-
 
-      # ── 8. Build ──────────────────────────────────────────────────────────
       - name: Build firmware
         working-directory: wled-src
         run: pio run -e esp32dev
 
-      # ── 9. Upload .bin as artifact ────────────────────────────────────────
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
@@ -100,7 +93,6 @@ jobs:
             wled-src/.pio/build/esp32dev/partitions.bin
           retention-days: 30
 
-      # ── 10. Create a GitHub Release on tag push ───────────────────────────
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
@@ -110,7 +102,6 @@ jobs:
             wled-src/.pio/build/esp32dev/partitions.bin
           body: |
             ## WLED Bambu Firmware
-
             Flash `firmware.bin` to your ESP32, then go to `http://<device-ip>/bambu`
             to configure your printer IP and per-state LED effects.
         env:
