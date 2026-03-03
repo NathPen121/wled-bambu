@@ -1,46 +1,55 @@
 #!/usr/bin/env python3
 """
-patch_wled.py — injects P1S hooks into WLED's wled00.ino
+patch_wled.py — injects Bambu hooks into WLED's main file
 
-Usage: python3 patch_wled.py path/to/wled00/wled00.ino
+Usage: python3 patch_wled.py path/to/wled00/
+       (pass the wled00 DIRECTORY — handles both old and new WLED layouts)
 """
 
 import sys
 import re
+import os
 
 INCLUDE_MARKER = '#include "wled.h"'
-INCLUDE_INJECT = '''\
-#include "bambu_status.h"
-// wled_bambu_server.cpp included in bambu_status.cpp build
-'''
+INCLUDE_INJECT = '#include "bambu_status.h"\n'
 
-SETUP_MARKER   = re.compile(r'(void\s+setup\s*\(\s*\)\s*\{[^\n]*\n)')
-SETUP_INJECT   = '  setupBambuWebRoutes();\n  loadDefaultBambuEffects();\n'
+SETUP_MARKER = re.compile(r'(void\s+setup\s*\(\s*\)\s*\{[^\n]*\n)')
+SETUP_INJECT = '  setupBambuWebRoutes();\n  loadDefaultBambuEffects();\n'
 
-LOOP_MARKER    = re.compile(r'(void\s+loop\s*\(\s*\)\s*\{[^\n]*\n)')
-LOOP_INJECT    = '  pollBambu();\n  applyBambuEffects();\n'
+LOOP_MARKER  = re.compile(r'(void\s+loop\s*\(\s*\)\s*\{[^\n]*\n)')
+LOOP_INJECT  = '  pollBambu();\n  applyBambuEffects();\n'
 
-def patch(path):
+def find_main_file(directory):
+    for name in ['wled_main.cpp', 'wled00.ino']:
+        path = os.path.join(directory, name)
+        if os.path.exists(path):
+            print(f'[patch_wled] Found: {path}')
+            return path
+    return None
+
+def patch(target):
+    if os.path.isdir(target):
+        path = find_main_file(target)
+    else:
+        path = target if os.path.exists(target) else find_main_file(os.path.dirname(target))
+
+    if not path:
+        print(f'[patch_wled] ERROR: Cannot find wled_main.cpp or wled00.ino in {target}')
+        sys.exit(1)
+
     with open(path, 'r') as f:
         src = f.read()
 
-    # Skip if already patched
     if 'bambu_status.h' in src:
-        print(f'[patch_wled] {path} already patched, skipping.')
+        print(f'[patch_wled] Already patched, skipping.')
         return
 
-    # Inject include
     if INCLUDE_MARKER in src:
-        src = src.replace(INCLUDE_MARKER,
-                          INCLUDE_MARKER + '\n' + INCLUDE_INJECT, 1)
+        src = src.replace(INCLUDE_MARKER, INCLUDE_MARKER + '\n' + INCLUDE_INJECT, 1)
     else:
-        # Prepend if marker not found
         src = INCLUDE_INJECT + src
 
-    # Inject into setup()
     src = SETUP_MARKER.sub(r'\1' + SETUP_INJECT, src, count=1)
-
-    # Inject into loop() — find closing brace of loop and insert before it
     src = LOOP_MARKER.sub(r'\1' + LOOP_INJECT, src, count=1)
 
     with open(path, 'w') as f:
@@ -50,6 +59,6 @@ def patch(path):
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print('Usage: patch_wled.py <path/to/wled00.ino>')
+        print('Usage: patch_wled.py <path/to/wled00/>')
         sys.exit(1)
     patch(sys.argv[1])
