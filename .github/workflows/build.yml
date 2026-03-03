@@ -46,11 +46,16 @@ jobs:
           echo "--- Bambu files injected ---"
           ls wled-src/wled00/ | grep bambu
 
-      - name: Set up platformio_override.ini
+      - name: Patch WLED platformio.ini
         working-directory: wled-src
         run: |
-          # Use WLED's own esp32dev env exactly as-is, just set it as default
-          # and append our custom defines without touching any compiler flags
+          # Remove the -Wshadow=compatible-local flag which the old xtensa
+          # toolchain doesn't support, and add our custom defines
+          sed -i 's/-Wshadow=compatible-local//g' platformio.ini
+          echo ""
+          echo "Patched platformio.ini - removed unsupported flag"
+          echo ""
+          # Add our custom defines to the esp32dev environment via override
           cat > platformio_override.ini << 'EOF'
           [platformio]
           default_envs = esp32dev
