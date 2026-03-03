@@ -49,24 +49,31 @@ jobs:
       - name: Patch WLED platformio.ini
         working-directory: wled-src
         run: |
-          # Remove the -Wshadow=compatible-local flag which the old xtensa
-          # toolchain doesn't support, and add our custom defines
+          # 1. Remove unsupported -Wshadow flag from WLED's own ini
           sed -i 's/-Wshadow=compatible-local//g' platformio.ini
-          echo ""
-          echo "Patched platformio.ini - removed unsupported flag"
-          echo ""
-          # Add our custom defines to the esp32dev environment via override
-          cat > platformio_override.ini << 'EOF'
-          [platformio]
-          default_envs = esp32dev
+          # 2. Append our custom defines directly into the esp32dev section
+          #    using python to avoid any ini inheritance issues
+          python3 - << 'PYEOF'
+          import re
 
-          [env:esp32dev]
-          build_flags = ${esp32_idf_V4.build_flags}
-            -D LEDPIN=5
-            -D BTNPIN=-1
-            -D RLYPIN=-1
-            -D IRPIN=-1
-          EOF
+          with open('platformio.ini', 'r') as f:
+              content = f.read()
+
+          extra = "\n  -D LEDPIN=5\n  -D BTNPIN=-1\n  -D RLYPIN=-1\n  -D IRPIN=-1"
+
+          # Find the esp32dev build_flags and append to them
+          content = re.sub(
+              r'(\[env:esp32dev\].*?build_flags\s*=\s*)(.*?)(\n\[)',
+              lambda m: m.group(1) + m.group(2) + extra + '\n' + m.group(3),
+              content,
+              flags=re.DOTALL
+          )
+
+          with open('platformio.ini', 'w') as f:
+              f.write(content)
+
+          print("platformio.ini patched successfully")
+          PYEOF
 
       - name: Set up Python
         uses: actions/setup-python@v5
