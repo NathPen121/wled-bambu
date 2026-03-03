@@ -3,7 +3,6 @@
 
 #include <Arduino.h>
 
-// ── Effect descriptor ─────────────────────────────────────────────────────────
 struct BambuEffect {
   uint8_t       fx;
   uint8_t       col[3];
@@ -13,17 +12,18 @@ struct BambuEffect {
   unsigned long duration;
 };
 
-// ── Globals ───────────────────────────────────────────────────────────────────
+#define BAMBU_STATE_COUNT 6
+extern const char* BAMBU_STATE_NAMES[BAMBU_STATE_COUNT];
+
 extern String        bambu_ip;
 extern bool          bambu_enabled;
 extern unsigned long bambu_last_poll;
 extern String        bambu_state;
-extern BambuEffect   bambu_effects[6];
+extern BambuEffect   bambu_effects[BAMBU_STATE_COUNT];
 
-// ── Public API ────────────────────────────────────────────────────────────────
 void pollBambu();
 void applyBambuEffects();
 void loadDefaultBambuEffects();
 void setupBambuWebRoutes();
 
-#endif // BAMBU_STATUS_H
+#endif

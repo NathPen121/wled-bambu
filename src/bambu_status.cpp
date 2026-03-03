@@ -2,24 +2,23 @@
 #include "bambu_status.h"
 #include <ArduinoJson.h>
 
-// ── Globals ───────────────────────────────────────────────────────────────────
+// Single definition of STATE_NAMES - shared via extern in header
+const char* BAMBU_STATE_NAMES[BAMBU_STATE_COUNT] = {
+  "printing","heating","cooling","idle","downloading","error"
+};
+
 String        bambu_ip        = "";
 bool          bambu_enabled   = false;
 unsigned long bambu_last_poll = 0;
 String        bambu_state     = "idle";
-BambuEffect   bambu_effects[6];
-
-static const char* STATE_NAMES[] = {
-  "printing","heating","cooling","idle","downloading","error"
-};
+BambuEffect   bambu_effects[BAMBU_STATE_COUNT];
 
 static int stateIndex(const String& s) {
-  for (int i = 0; i < 6; i++)
-    if (s == STATE_NAMES[i]) return i;
+  for (int i = 0; i < BAMBU_STATE_COUNT; i++)
+    if (s == BAMBU_STATE_NAMES[i]) return i;
   return 3; // default: idle
 }
 
-// ── HTTP poll ─────────────────────────────────────────────────────────────────
 void pollBambu() {
   if (!bambu_enabled || bambu_ip.length() < 7) return;
   if (millis() - bambu_last_poll < 2000) return;
@@ -65,12 +64,10 @@ void pollBambu() {
   else if (state == "slicing")  bambu_state = "downloading";
   else                          bambu_state = "idle";
 
-  // Treat idle + hot nozzle as heating
   float hotend = pr["nozzle_temper"] | 0.0f;
   if (bambu_state == "idle" && hotend > 40.0f) bambu_state = "heating";
 }
 
-// ── Apply current state's effect to WLED segment 0 ───────────────────────────
 void applyBambuEffects() {
   if (!bambu_enabled) return;
 
@@ -90,21 +87,18 @@ void applyBambuEffects() {
                 |  (uint32_t)fx->col2[2];
 
   strip.trigger();
-  stateChanged = true;
+  colorUpdated(CALL_MODE_DIRECT_CHANGE); // correct WLED 0.15 API
 }
 
-// ── Load defaults ─────────────────────────────────────────────────────────────
 void loadDefaultBambuEffects() {
-  // Hard-coded fallbacks
-  bambu_effects[0] = {2,  {255,255,255}, {0,0,0}, 128, 128, 0}; // printing  - white breathe
-  bambu_effects[1] = {2,  {255,120,  0}, {0,0,0}, 200, 200, 0}; // heating   - orange pulse
-  bambu_effects[2] = {2,  {  0, 50,255}, {0,0,0}, 100, 100, 0}; // cooling   - blue breathe
-  bambu_effects[3] = {0,  {255,200,150}, {0,0,0},   0,   0, 0}; // idle      - warm white solid
-  bambu_effects[4] = {15, {  0,255,200}, {0,0,0}, 128, 128, 0}; // downloading - cyan running
-  bambu_effects[5] = {2,  {255,  0,  0}, {0,0,0}, 255, 255, 0}; // error     - red flash
+  bambu_effects[0] = {2,  {255,255,255}, {0,0,0}, 128, 128, 0};
+  bambu_effects[1] = {2,  {255,120,  0}, {0,0,0}, 200, 200, 0};
+  bambu_effects[2] = {2,  {  0, 50,255}, {0,0,0}, 100, 100, 0};
+  bambu_effects[3] = {0,  {255,200,150}, {0,0,0},   0,   0, 0};
+  bambu_effects[4] = {15, {  0,255,200}, {0,0,0}, 128, 128, 0};
+  bambu_effects[5] = {2,  {255,  0,  0}, {0,0,0}, 255, 255, 0};
 
-  // Try to load saved config from LittleFS
-  if (!WLED_FS.begin()) return;
+  // Load saved config - FS is already mounted by WLED, don't call begin()
   File f = WLED_FS.open("/bambu.json", "r");
   if (!f) return;
 
@@ -114,12 +108,12 @@ void loadDefaultBambuEffects() {
 
   if (doc.containsKey("ip"))      bambu_ip      = doc["ip"].as<String>();
   if (doc.containsKey("enabled")) bambu_enabled = doc["enabled"].as<bool>();
-
   if (!doc.containsKey("effects")) return;
+
   JsonObject effects = doc["effects"];
-  for (int i = 0; i < 6; i++) {
-    if (!effects.containsKey(STATE_NAMES[i])) continue;
-    JsonObject e = effects[STATE_NAMES[i]];
+  for (int i = 0; i < BAMBU_STATE_COUNT; i++) {
+    if (!effects.containsKey(BAMBU_STATE_NAMES[i])) continue;
+    JsonObject e = effects[BAMBU_STATE_NAMES[i]];
     bambu_effects[i].fx        = e["fx"]        | bambu_effects[i].fx;
     bambu_effects[i].col[0]    = e["col"][0]    | bambu_effects[i].col[0];
     bambu_effects[i].col[1]    = e["col"][1]    | bambu_effects[i].col[1];

@@ -2,19 +2,14 @@
 #include "bambu_status.h"
 #include <ArduinoJson.h>
 
-static const char* STATE_NAMES[] = {
-  "printing","heating","cooling","idle","downloading","error"
-};
-
-// ── Helper: save config to filesystem ────────────────────────────────────────
 static void saveBambuConfig() {
   DynamicJsonDocument doc(2048);
   doc["ip"]      = bambu_ip;
   doc["enabled"] = bambu_enabled;
 
   JsonObject effects = doc.createNestedObject("effects");
-  for (int i = 0; i < 6; i++) {
-    JsonObject e   = effects.createNestedObject(STATE_NAMES[i]);
+  for (int i = 0; i < BAMBU_STATE_COUNT; i++) {
+    JsonObject e   = effects.createNestedObject(BAMBU_STATE_NAMES[i]);
     e["fx"]        = bambu_effects[i].fx;
     JsonArray col  = e.createNestedArray("col");
     col.add(bambu_effects[i].col[0]);
@@ -29,16 +24,13 @@ static void saveBambuConfig() {
     e["duration"]  = bambu_effects[i].duration;
   }
 
-  if (WLED_FS.begin()) {
-    File f = WLED_FS.open("/bambu.json", "w");
-    if (f) { serializeJson(doc, f); f.close(); }
-  }
+  // FS already mounted by WLED - don't call begin()
+  File f = WLED_FS.open("/bambu.json", "w");
+  if (f) { serializeJson(doc, f); f.close(); }
 }
 
-// ── Register web routes ───────────────────────────────────────────────────────
 void setupBambuWebRoutes() {
 
-  // GET /bambu/status
   server.on("/bambu/status", HTTP_GET, [](AsyncWebServerRequest* request) {
     DynamicJsonDocument doc(1024);
     doc["state"]   = bambu_state;
@@ -46,8 +38,8 @@ void setupBambuWebRoutes() {
     doc["ip"]      = bambu_ip;
 
     JsonObject effects = doc.createNestedObject("effects");
-    for (int i = 0; i < 6; i++) {
-      JsonObject e   = effects.createNestedObject(STATE_NAMES[i]);
+    for (int i = 0; i < BAMBU_STATE_COUNT; i++) {
+      JsonObject e   = effects.createNestedObject(BAMBU_STATE_NAMES[i]);
       e["fx"]        = bambu_effects[i].fx;
       JsonArray col  = e.createNestedArray("col");
       col.add(bambu_effects[i].col[0]);
@@ -67,7 +59,6 @@ void setupBambuWebRoutes() {
     request->send(200, "application/json", out);
   });
 
-  // POST /bambu/config
   server.on("/bambu/config", HTTP_POST,
     [](AsyncWebServerRequest* request) {
       request->send(400, "text/plain", "Send JSON body");
@@ -85,9 +76,9 @@ void setupBambuWebRoutes() {
 
       if (doc.containsKey("effects")) {
         JsonObject effects = doc["effects"];
-        for (int i = 0; i < 6; i++) {
-          if (!effects.containsKey(STATE_NAMES[i])) continue;
-          JsonObject e = effects[STATE_NAMES[i]];
+        for (int i = 0; i < BAMBU_STATE_COUNT; i++) {
+          if (!effects.containsKey(BAMBU_STATE_NAMES[i])) continue;
+          JsonObject e = effects[BAMBU_STATE_NAMES[i]];
           if (e.containsKey("fx"))        bambu_effects[i].fx        = e["fx"];
           if (e.containsKey("speed"))     bambu_effects[i].speed     = e["speed"];
           if (e.containsKey("intensity")) bambu_effects[i].intensity = e["intensity"];
@@ -110,6 +101,5 @@ void setupBambuWebRoutes() {
     }
   );
 
-  // Serve editor UI
   server.serveStatic("/bambu", WLED_FS, "/bambu.htm");
 }
