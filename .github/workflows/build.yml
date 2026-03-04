@@ -49,41 +49,9 @@ jobs:
       - name: Patch WLED platformio.ini
         working-directory: wled-src
         run: |
-          python3 - << 'PYEOF'
-          import configparser
-
-          # Read raw content for flag removal
-          with open('platformio.ini', 'r') as f:
-              raw = f.read()
-
-          # 1. Remove unsupported -Wshadow flag
-          raw = raw.replace('-Wshadow=compatible-local', '')
-
-          with open('platformio.ini', 'w') as f:
-              f.write(raw)
-
-          # 2. Use configparser to safely append ArduinoJson to existing lib_deps
-          cfg = configparser.RawConfigParser()
-          cfg.read('platformio.ini')
-
-          added = False
-          for section in cfg.sections():
-              if cfg.has_option(section, 'lib_deps'):
-                  deps = cfg.get(section, 'lib_deps')
-                  if 'ArduinoJson' not in deps:
-                      cfg.set(section, 'lib_deps', deps + '\n  bblanchon/ArduinoJson@^6.21.3')
-                      added = True
-                      print(f"Added ArduinoJson to [{section}]")
-                      break
-
-          if not added:
-              print("WARNING: could not find lib_deps section to append to")
-
-          with open('platformio.ini', 'w') as f:
-              cfg.write(f)
-
-          print("platformio.ini patched OK")
-          PYEOF
+          # Remove the -Wshadow flag unsupported by the old xtensa toolchain
+          sed -i 's/-Wshadow=compatible-local//g' platformio.ini
+          echo "Patched platformio.ini"
 
       - name: Set up Python
         uses: actions/setup-python@v5

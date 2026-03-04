@@ -1,6 +1,5 @@
 #include "wled.h"
 #include "bambu_status.h"
-#include <ArduinoJson.h>
 
 static void saveBambuConfig() {
   DynamicJsonDocument doc(2048);

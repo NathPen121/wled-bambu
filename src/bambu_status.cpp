@@ -1,6 +1,8 @@
+// NOTE: Do NOT include <ArduinoJson.h> here!
+// wled.h already pulls in WLED's bundled ArduinoJson via AsyncJson-v6.h.
+// Including it again causes duplicate symbol errors.
 #include "wled.h"
 #include "bambu_status.h"
-#include <ArduinoJson.h>
 
 const char* BAMBU_STATE_NAMES[BAMBU_STATE_COUNT] = {
   "printing","heating","cooling","idle","downloading","error"
@@ -12,7 +14,7 @@ unsigned long bambu_last_poll = 0;
 String        bambu_state     = "idle";
 BambuEffect   bambu_effects[BAMBU_STATE_COUNT];
 
-static String bambu_last_applied = "";  // only push to WLED on state change
+static String bambu_last_applied = "";
 
 static int stateIndex(const String& s) {
   for (int i = 0; i < BAMBU_STATE_COUNT; i++)
@@ -71,13 +73,12 @@ void pollBambu() {
 
 void applyBambuEffects() {
   if (!bambu_enabled) return;
-  if (bambu_state == bambu_last_applied) return; // only update on change
+  if (bambu_state == bambu_last_applied) return;
   bambu_last_applied = bambu_state;
 
   int idx = stateIndex(bambu_state);
   BambuEffect* fx = &bambu_effects[idx];
 
-  // Segment is a typedef'd struct in WLED's FX.h, accessible globally
   Segment& seg = strip.getSegment(0);
   seg.setOption(SEG_OPTION_ON, true);
   seg.mode      = fx->fx;
