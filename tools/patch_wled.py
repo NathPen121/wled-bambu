@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """
-patch_wled.py — injects Bambu hooks into WLED's main file
-
-Usage: python3 patch_wled.py path/to/wled00/
-       (pass the wled00 DIRECTORY — handles both old and new WLED layouts)
+patch_wled.py - injects Bambu hooks into WLED's main file
+Handles both old (void setup/loop) and new (WLED::setup/WLED::loop) patterns
 """
 
 import sys
@@ -13,10 +11,11 @@ import os
 INCLUDE_MARKER = '#include "wled.h"'
 INCLUDE_INJECT = '#include "bambu_status.h"\n'
 
-SETUP_MARKER = re.compile(r'(void\s+setup\s*\(\s*\)\s*\{[^\n]*\n)')
+# Matches both:  void setup() {   AND   void WLED::setup() {
+SETUP_MARKER = re.compile(r'(void\s+(?:WLED::)?setup\s*\(\s*\)\s*\{[^\n]*\n)')
 SETUP_INJECT = '  setupBambuWebRoutes();\n  loadDefaultBambuEffects();\n'
 
-LOOP_MARKER  = re.compile(r'(void\s+loop\s*\(\s*\)\s*\{[^\n]*\n)')
+LOOP_MARKER  = re.compile(r'(void\s+(?:WLED::)?loop\s*\(\s*\)\s*\{[^\n]*\n)')
 LOOP_INJECT  = '  pollBambu();\n  applyBambuEffects();\n'
 
 def find_main_file(directory):
@@ -44,18 +43,33 @@ def patch(target):
         print(f'[patch_wled] Already patched, skipping.')
         return
 
+    # Inject include after wled.h
     if INCLUDE_MARKER in src:
         src = src.replace(INCLUDE_MARKER, INCLUDE_MARKER + '\n' + INCLUDE_INJECT, 1)
     else:
         src = INCLUDE_INJECT + src
 
-    src = SETUP_MARKER.sub(r'\1' + SETUP_INJECT, src, count=1)
-    src = LOOP_MARKER.sub(r'\1' + LOOP_INJECT, src, count=1)
+    # Inject into setup
+    new_src, count = SETUP_MARKER.subn(r'\1' + SETUP_INJECT, src, count=1)
+    if count == 0:
+        print(f'[patch_wled] WARNING: setup() not found, appending to end of file')
+        new_src = src + '\nvoid _bambu_init() {\n' + SETUP_INJECT + '}\n'
+    src = new_src
+
+    # Inject into loop
+    new_src, count = LOOP_MARKER.subn(r'\1' + LOOP_INJECT, src, count=1)
+    if count == 0:
+        print(f'[patch_wled] WARNING: loop() not found')
+    src = new_src
 
     with open(path, 'w') as f:
         f.write(src)
 
     print(f'[patch_wled] Patched {path} successfully.')
+    # Show what was injected
+    for line in src.split('\n'):
+        if 'Bambu' in line or 'bambu' in line:
+            print(f'  >> {line}')
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:

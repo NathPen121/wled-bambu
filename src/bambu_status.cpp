@@ -2,7 +2,6 @@
 #include "bambu_status.h"
 #include <ArduinoJson.h>
 
-// Single definition of STATE_NAMES - shared via extern in header
 const char* BAMBU_STATE_NAMES[BAMBU_STATE_COUNT] = {
   "printing","heating","cooling","idle","downloading","error"
 };
@@ -13,10 +12,12 @@ unsigned long bambu_last_poll = 0;
 String        bambu_state     = "idle";
 BambuEffect   bambu_effects[BAMBU_STATE_COUNT];
 
+static String bambu_last_applied = "";  // only push to WLED on state change
+
 static int stateIndex(const String& s) {
   for (int i = 0; i < BAMBU_STATE_COUNT; i++)
     if (s == BAMBU_STATE_NAMES[i]) return i;
-  return 3; // default: idle
+  return 3;
 }
 
 void pollBambu() {
@@ -28,7 +29,7 @@ void pollBambu() {
   if (!client.connect(bambu_ip.c_str(), 80)) return;
 
   client.println("GET /server/info HTTP/1.1");
-  client.println("Host: " + bambu_ip);
+  client.print("Host: "); client.println(bambu_ip);
   client.println("Connection: close");
   client.println();
 
@@ -70,13 +71,16 @@ void pollBambu() {
 
 void applyBambuEffects() {
   if (!bambu_enabled) return;
+  if (bambu_state == bambu_last_applied) return; // only update on change
+  bambu_last_applied = bambu_state;
 
   int idx = stateIndex(bambu_state);
   BambuEffect* fx = &bambu_effects[idx];
 
+  // Segment is a typedef'd struct in WLED's FX.h, accessible globally
   Segment& seg = strip.getSegment(0);
   seg.setOption(SEG_OPTION_ON, true);
-  seg.fx        = fx->fx;
+  seg.mode      = fx->fx;
   seg.speed     = fx->speed;
   seg.intensity = fx->intensity;
   seg.colors[0] = ((uint32_t)fx->col[0]  << 16)
@@ -86,8 +90,7 @@ void applyBambuEffects() {
                 | ((uint32_t)fx->col2[1] <<  8)
                 |  (uint32_t)fx->col2[2];
 
-  strip.trigger();
-  colorUpdated(CALL_MODE_DIRECT_CHANGE); // correct WLED 0.15 API
+  colorUpdated(CALL_MODE_DIRECT_CHANGE);
 }
 
 void loadDefaultBambuEffects() {
@@ -98,7 +101,6 @@ void loadDefaultBambuEffects() {
   bambu_effects[4] = {15, {  0,255,200}, {0,0,0}, 128, 128, 0};
   bambu_effects[5] = {2,  {255,  0,  0}, {0,0,0}, 255, 255, 0};
 
-  // Load saved config - FS is already mounted by WLED, don't call begin()
   File f = WLED_FS.open("/bambu.json", "r");
   if (!f) return;
 
