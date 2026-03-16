@@ -15,6 +15,7 @@ String        bambu_state     = "idle";
 BambuEffect   bambu_effects[BAMBU_STATE_COUNT];
 
 static String bambu_last_applied = "";
+static bool bambu_routes_registered = false;
 
 static int stateIndex(const String& s) {
   for (int i = 0; i < BAMBU_STATE_COUNT; i++)
@@ -23,6 +24,12 @@ static int stateIndex(const String& s) {
 }
 
 void pollBambu() {
+  // Register web routes once, after WLED has fully initialized the server
+  if (!bambu_routes_registered) {
+    setupBambuWebRoutes();
+    bambu_routes_registered = true;
+  }
+
   if (!bambu_enabled || bambu_ip.length() < 7) return;
   if (millis() - bambu_last_poll < 2000) return;
   bambu_last_poll = millis();

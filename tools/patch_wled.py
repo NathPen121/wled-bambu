@@ -13,7 +13,7 @@ INCLUDE_INJECT = '#include "bambu_status.h"\n'
 
 # Matches both:  void setup() {   AND   void WLED::setup() {
 SETUP_MARKER = re.compile(r'(void\s+(?:WLED::)?setup\s*\(\s*\)\s*\{[^\n]*\n)')
-SETUP_INJECT = '  setupBambuWebRoutes();\n  loadDefaultBambuEffects();\n'
+SETUP_INJECT = '  loadDefaultBambuEffects();\n'
 
 LOOP_MARKER  = re.compile(r'(void\s+(?:WLED::)?loop\s*\(\s*\)\s*\{[^\n]*\n)')
 LOOP_INJECT  = '  pollBambu();\n  applyBambuEffects();\n'
