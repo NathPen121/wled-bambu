@@ -41,31 +41,7 @@ jobs:
           fi
 
           # Inject Bambu tab into WLED's top nav
-          python3 -c "
-import re, sys
-
-path = 'wled-src/wled00/data/index.htm'
-with open(path, 'r') as f:
-    src = f.read()
-
-if '/bambu' in src:
-    print('Nav tab already injected')
-    sys.exit(0)
-
-# Find the last <a ...>...</a> tab in the top nav and insert after it
-# WLED nav tabs look like: <a class=\"bt\" href=\"/settings\">Config</a>
-tab = '<a class=\"bt\" href=\"/bambu\" target=\"_self\">&#x1F5A8; Bambu</a>'
-src = re.sub(
-    r'(<a[^>]+href=\"/settings\"[^>]*>[^<]+</a>)',
-    r'\1' + tab,
-    src,
-    count=1
-)
-
-with open(path, 'w') as f:
-    f.write(src)
-print('Nav tab injected')
-"
+          python3 wled-bambu/tools/patch_nav.py
 
           echo "--- Before patch ---"
           grep -n "BambuUsermod\|registerUsermods" wled-src/wled00/usermods_list.cpp | head -5
