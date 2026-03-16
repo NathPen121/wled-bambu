@@ -173,7 +173,7 @@ void BambuUsermod::_registerRoutes() {
           }
         }
         serializeConfig();
-        _mqttConnect(); // reconnect with new credentials
+        _lastPoll = 0; // trigger reconnect on next poll tick
       }
       req->send(200, "text/plain", "OK");
     }
@@ -204,7 +204,7 @@ void BambuUsermod::_mqttConnect() {
 }
 
 void BambuUsermod::_mqttMessage(char* topic, byte* payload, unsigned int len) {
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(4096);
   if (deserializeJson(doc, payload, len)) return;
   if (!doc.containsKey("print")) return;
 
