@@ -77,11 +77,21 @@ jobs:
       - name: Merge into single flashable binary
         working-directory: wled-src
         run: |
-          pip install esptool
-          # PlatformIO bootloader is in the framework package
+          # Use PlatformIO's own esptool - already installed during build
+          ESPTOOL=$(find ~/.platformio -name "esptool.py" 2>/dev/null | head -1)
+          echo "esptool: $ESPTOOL"
+
+          # Find bootloader - check all known locations
           BOOTLOADER=$(find ~/.platformio -name "bootloader_dio_40m.bin" 2>/dev/null | head -1)
-          echo "Using bootloader: $BOOTLOADER"
-          esptool --chip esp32 merge-bin \
+          if [ -z "$BOOTLOADER" ]; then
+            BOOTLOADER=$(find ~/.platformio -name "bootloader_*.bin" 2>/dev/null | head -1)
+          fi
+          echo "Bootloader: $BOOTLOADER"
+
+          # List build dir so we can see what's there
+          ls -la .pio/build/esp32dev/
+
+          python3 "$ESPTOOL" --chip esp32 merge-bin \
             -o .pio/build/esp32dev/WLED-Bambu-merged.bin \
             --flash-mode dio \
             --flash-freq 40m \
