@@ -70,20 +70,20 @@ jobs:
 
       - name: Build firmware
         working-directory: wled-src
-        run: pio run -e d1_mini
+        run: pio run -e nodemcuv2
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
           name: WLED-Bambu-D1Mini
-          path: wled-src/.pio/build/d1_mini/firmware.bin
+          path: wled-src/.pio/build/nodemcuv2/firmware.bin
           retention-days: 30
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: wled-src/.pio/build/d1_mini/firmware.bin
+          files: wled-src/.pio/build/nodemcuv2/firmware.bin
           body: |
             ## WLED Bambu Firmware - D1 Mini
             Flash `firmware.bin` to your D1 Mini at address 0x0.
