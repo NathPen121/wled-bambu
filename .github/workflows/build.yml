@@ -23,6 +23,14 @@ jobs:
           git clone --depth 1 --branch v0.15.0-b6 \
             https://github.com/wled/WLED.git wled-src
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
       - name: Install Node dependencies
         working-directory: wled-src
         run: npm install
@@ -54,19 +62,11 @@ jobs:
         working-directory: wled-src
         run: |
           sed -i 's/-Wshadow=compatible-local//g' platformio.ini
-          python3 ../wled-bambu/tools/patch_platformio.py
-          echo "  knolleary/PubSubClient@^2.8" >> platformio.ini
-          echo "  -DMQTT_MAX_PACKET_SIZE=4096" >> platformio.ini
           echo "Patched platformio.ini"
-          tail -5 platformio.ini
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install PlatformIO
-        run: pip install platformio
+      - name: Install PubSubClient library
+        working-directory: wled-src
+        run: pio pkg install --environment nodemcuv2 --library "knolleary/PubSubClient@^2.8"
 
       - name: Cache PlatformIO
         uses: actions/cache@v4
