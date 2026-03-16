@@ -29,46 +29,30 @@ jobs:
 
       - name: Inject Bambu files into WLED
         run: |
-          cp wled-bambu/src/bambu_status.h        wled-src/wled00/
-          cp wled-bambu/src/bambu_status.cpp      wled-src/wled00/
+          cp wled-bambu/src/bambu_status.h   wled-src/wled00/
+          cp wled-bambu/src/bambu_status.cpp wled-src/wled00/
 
           if [ -d wled-src/wled00/data ]; then
-            cp wled-bambu/data/bambu.htm           wled-src/wled00/data/
-            cp wled-bambu/data/bambu_default.json  wled-src/wled00/data/
+            cp wled-bambu/data/bambu.htm          wled-src/wled00/data/
+            cp wled-bambu/data/bambu_default.json wled-src/wled00/data/
           else
-            cp wled-bambu/data/bambu.htm           wled-src/data/
-            cp wled-bambu/data/bambu_default.json  wled-src/data/
+            cp wled-bambu/data/bambu.htm          wled-src/data/
+            cp wled-bambu/data/bambu_default.json wled-src/data/
           fi
 
-          # Inject Bambu tab into WLED's top nav
           python3 wled-bambu/tools/patch_nav.py
 
-          echo "--- Before patch ---"
+          echo "--- Before usermod patch ---"
           grep -n "BambuUsermod\|registerUsermods" wled-src/wled00/usermods_list.cpp | head -5
 
           python3 wled-bambu/tools/patch_wled.py wled-src/wled00/
 
-          echo "--- After patch ---"
+          echo "--- After usermod patch ---"
           grep -n "BambuUsermod\|registerUsermods" wled-src/wled00/usermods_list.cpp | head -10
 
       - name: Patch WLED platformio.ini
         working-directory: wled-src
-        run: |
-          sed -i 's/-Wshadow=compatible-local//g' platformio.ini
-          # Add PubSubClient for Bambu MQTT
-          python3 -c "
-import configparser, sys
-c = configparser.RawConfigParser()
-c.read('platformio.ini')
-for s in c.sections():
-    if c.has_option(s, 'lib_deps'):
-        v = c.get(s, 'lib_deps')
-        if 'PubSubClient' not in v:
-            c.set(s, 'lib_deps', v + '\n  knolleary/PubSubClient@^2.8')
-with open('platformio.ini', 'w') as f:
-    c.write(f)
-"
-          echo "Patched platformio.ini"
+        run: python3 ../wled-bambu/tools/patch_platformio.py
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -104,7 +88,7 @@ with open('platformio.ini', 'w') as f:
           files: wled-src/.pio/build/nodemcuv2/firmware.bin
           body: |
             ## WLED Bambu Firmware - D1 Mini
-            Flash `firmware.bin` to your D1 Mini at address 0x0.
-            Then go to `http://<device-ip>/bambu` to configure your printer.
+            Flash firmware.bin to your D1 Mini at address 0x0.
+            Then go to http://4.3.2.1/bambu to configure your printer.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

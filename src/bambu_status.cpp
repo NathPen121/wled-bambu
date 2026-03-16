@@ -75,7 +75,6 @@ function buildGrid(){
     </div>`;
   });
 }
-function toHex(rgb){'#'+rgb.map(v=>v.toString(16).padStart(2,'0')).join('');}
 function toHex(rgb){return '#'+rgb.map(v=>v.toString(16).padStart(2,'0')).join('');}
 function toRgb(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
 async function save(){
@@ -109,7 +108,15 @@ static const char* STATE_NAMES[BAMBU_STATE_COUNT] = {
   "printing","heating","cooling","idle","downloading","error"
 };
 
+// Static instance pointer for PubSubClient callback
+BambuUsermod* BambuUsermod::instance = nullptr;
+
+void BambuUsermod::mqttCallback(char* topic, byte* payload, unsigned int len) {
+  if (instance) instance->_mqttMessage(topic, payload, len);
+}
+
 void BambuUsermod::setup() {
+  instance = this;
   _defaultEffects();
 }
 
@@ -125,7 +132,7 @@ void BambuUsermod::loop() {
 void BambuUsermod::_registerRoutes() {
   // Serve embedded HTML
   server.on("/bambu", HTTP_GET, [](AsyncWebServerRequest* req) {
-    AsyncWebServerResponse* resp = req->beginResponse_P(200, "text/html", (const uint8_t*)BAMBU_HTML, strlen_P(BAMBU_HTML));
+    AsyncWebServerResponse* resp = req->beginResponse_P(200, "text/html", (PGM_P)BAMBU_HTML, strlen_P(BAMBU_HTML));
     req->send(resp);
   });
 
@@ -142,7 +149,7 @@ void BambuUsermod::_registerRoutes() {
     [](AsyncWebServerRequest* req){},
     NULL,
     [this](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t, size_t) {
-      DynamicJsonDocument doc(1024);
+      DynamicJsonDocument doc(4096);
       if (!deserializeJson(doc, data, len)) {
         if (doc.containsKey("ip"))      _ip      = doc["ip"].as<String>();
         if (doc.containsKey("ac"))      _ac      = doc["ac"].as<String>();
@@ -178,15 +185,18 @@ void BambuUsermod::_mqttConnect() {
   if (_ip.length() < 7 || _ac.isEmpty() || _sn.isEmpty()) return;
   if (_mqttClient.connected()) _mqttClient.disconnect();
 
+  // Bambu uses TLS with a self-signed cert - skip verification
+  _wifiClient.setInsecure();
+  _wifiClient.setTimeout(5000);  // 5 seconds
+
   _mqttClient.setServer(_ip.c_str(), 8883);
-  _mqttClient.setCallback([this](char* topic, byte* payload, unsigned int len) {
-    _mqttMessage(topic, payload, len);
-  });
+  _mqttClient.setBufferSize(4096);  // Bambu payloads are large
+  _mqttClient.setCallback(BambuUsermod::mqttCallback);
+  _mqttClient.setKeepAlive(60);
+  _mqttClient.setSocketTimeout(5);
 
   String clientId = "wled_" + _sn;
-  String user     = "bblp";
-  // Connect with access code as password
-  _mqttClient.connect(clientId.c_str(), user.c_str(), _ac.c_str());
+  _mqttClient.connect(clientId.c_str(), "bblp", _ac.c_str());
   if (_mqttClient.connected()) {
     String topic = "device/" + _sn + "/report";
     _mqttClient.subscribe(topic.c_str());
@@ -218,6 +228,7 @@ void BambuUsermod::_mqttMessage(char* topic, byte* payload, unsigned int len) {
 
 void BambuUsermod::_poll() {
   if (!_enabled) return;
+  if (WiFi.status() != WL_CONNECTED) return;
 
   // Reconnect MQTT if dropped
   if (!_mqttClient.connected()) {
@@ -284,5 +295,7 @@ bool BambuUsermod::readFromConfig(JsonObject& root) {
   _ac      = top["ac"]      | _ac;
   _sn      = top["sn"]      | _sn;
   _enabled = top["enabled"] | _enabled;
+  // Reconnect with loaded credentials once WiFi is up
+  _lastPoll = 0;
   return true;
 }
