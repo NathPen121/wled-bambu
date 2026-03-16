@@ -40,6 +40,33 @@ jobs:
             cp wled-bambu/data/bambu_default.json  wled-src/data/
           fi
 
+          # Inject Bambu tab into WLED's top nav
+          python3 -c "
+import re, sys
+
+path = 'wled-src/wled00/data/index.htm'
+with open(path, 'r') as f:
+    src = f.read()
+
+if '/bambu' in src:
+    print('Nav tab already injected')
+    sys.exit(0)
+
+# Find the last <a ...>...</a> tab in the top nav and insert after it
+# WLED nav tabs look like: <a class=\"bt\" href=\"/settings\">Config</a>
+tab = '<a class=\"bt\" href=\"/bambu\" target=\"_self\">&#x1F5A8; Bambu</a>'
+src = re.sub(
+    r'(<a[^>]+href=\"/settings\"[^>]*>[^<]+</a>)',
+    r'\1' + tab,
+    src,
+    count=1
+)
+
+with open(path, 'w') as f:
+    f.write(src)
+print('Nav tab injected')
+"
+
           echo "--- Before patch ---"
           grep -n "BambuUsermod\|registerUsermods" wled-src/wled00/usermods_list.cpp | head -5
 
@@ -52,6 +79,19 @@ jobs:
         working-directory: wled-src
         run: |
           sed -i 's/-Wshadow=compatible-local//g' platformio.ini
+          # Add PubSubClient for Bambu MQTT
+          python3 -c "
+import configparser, sys
+c = configparser.RawConfigParser()
+c.read('platformio.ini')
+for s in c.sections():
+    if c.has_option(s, 'lib_deps'):
+        v = c.get(s, 'lib_deps')
+        if 'PubSubClient' not in v:
+            c.set(s, 'lib_deps', v + '\n  knolleary/PubSubClient@^2.8')
+with open('platformio.ini', 'w') as f:
+    c.write(f)
+"
           echo "Patched platformio.ini"
 
       - name: Set up Python

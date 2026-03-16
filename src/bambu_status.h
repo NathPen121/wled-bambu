@@ -1,5 +1,6 @@
 #pragma once
 #include "wled.h"
+#include <PubSubClient.h>
 
 #define BAMBU_STATE_COUNT 6
 
@@ -23,6 +24,8 @@ public:
 
 private:
   String        _ip        = "";
+  String        _ac        = "";  // access code
+  String        _sn        = "";  // serial number
   bool          _enabled   = false;
   unsigned long _lastPoll  = 0;
   String        _state     = "idle";
@@ -30,7 +33,12 @@ private:
   bool          _routesDone = false;
   BambuEffect   _fx[BAMBU_STATE_COUNT];
 
+  WiFiClient    _wifiClient;
+  PubSubClient  _mqttClient{_wifiClient};
+
   void _registerRoutes();
+  void _mqttConnect();
+  void _mqttMessage(char* topic, byte* payload, unsigned int len);
   void _poll();
   void _applyEffect();
   int  _stateIndex(const String& s);
