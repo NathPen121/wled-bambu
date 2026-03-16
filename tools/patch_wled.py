@@ -1,72 +1,38 @@
 #!/usr/bin/env python3
 """
-patch_wled.py - injects Bambu hooks into WLED's main file
-Handles both old (void setup/loop) and new (WLED::setup/WLED::loop) patterns
+patch_wled.py - registers BambuUsermod in WLED's usermods_list.cpp
 """
+import sys, os, re
 
-import sys
-import re
-import os
-
-INCLUDE_MARKER = '#include "wled.h"'
-INCLUDE_INJECT = '#include "bambu_status.h"\n'
-
-# Matches both:  void setup() {   AND   void WLED::setup() {
-SETUP_MARKER = re.compile(r'(void\s+(?:WLED::)?setup\s*\(\s*\)\s*\{[^\n]*\n)')
-SETUP_INJECT = '  loadDefaultBambuEffects();\n'
-
-LOOP_MARKER  = re.compile(r'(void\s+(?:WLED::)?loop\s*\(\s*\)\s*\{[^\n]*\n)')
-LOOP_INJECT  = '  pollBambu();\n  applyBambuEffects();\n'
-
-def find_main_file(directory):
-    for name in ['wled_main.cpp', 'wled00.ino']:
-        path = os.path.join(directory, name)
-        if os.path.exists(path):
-            print(f'[patch_wled] Found: {path}')
-            return path
-    return None
-
-def patch(target):
-    if os.path.isdir(target):
-        path = find_main_file(target)
-    else:
-        path = target if os.path.exists(target) else find_main_file(os.path.dirname(target))
-
-    if not path:
-        print(f'[patch_wled] ERROR: Cannot find wled_main.cpp or wled00.ino in {target}')
+def patch(wled00_dir):
+    target = os.path.join(wled00_dir, 'usermods_list.cpp')
+    if not os.path.exists(target):
+        print(f'[patch_wled] ERROR: {target} not found')
         sys.exit(1)
 
-    with open(path, 'r') as f:
+    with open(target, 'r') as f:
         src = f.read()
 
-    if 'bambu_status.h' in src:
-        print(f'[patch_wled] Already patched, skipping.')
+    if 'BambuUsermod' in src:
+        print('[patch_wled] Already patched, skipping.')
         return
 
-    # Inject include after wled.h
-    if INCLUDE_MARKER in src:
-        src = src.replace(INCLUDE_MARKER, INCLUDE_MARKER + '\n' + INCLUDE_INJECT, 1)
-    else:
-        src = INCLUDE_INJECT + src
+    # Add include at top
+    src = '#include "bambu_status.h"\n' + src
 
-    # Inject into setup
-    new_src, count = SETUP_MARKER.subn(r'\1' + SETUP_INJECT, src, count=1)
-    if count == 0:
-        print(f'[patch_wled] WARNING: setup() not found, appending to end of file')
-        new_src = src + '\nvoid _bambu_init() {\n' + SETUP_INJECT + '}\n'
-    src = new_src
+    # Register instance - find the line that calls registerUsermod
+    # In WLED 0.15, usermods_list.cpp has a function void registerUsermods()
+    # We add our registration before the closing brace
+    src = re.sub(
+        r'(void\s+registerUsermods\s*\(\s*\)\s*\{)',
+        r'\1\n  usermods.add(new BambuUsermod());',
+        src
+    )
 
-    # Inject into loop
-    new_src, count = LOOP_MARKER.subn(r'\1' + LOOP_INJECT, src, count=1)
-    if count == 0:
-        print(f'[patch_wled] WARNING: loop() not found')
-    src = new_src
-
-    with open(path, 'w') as f:
+    with open(target, 'w') as f:
         f.write(src)
 
-    print(f'[patch_wled] Patched {path} successfully.')
-    # Show what was injected
+    print(f'[patch_wled] Patched {target}')
     for line in src.split('\n'):
         if 'Bambu' in line or 'bambu' in line:
             print(f'  >> {line}')

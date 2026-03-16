@@ -31,7 +31,6 @@ jobs:
         run: |
           cp wled-bambu/src/bambu_status.h        wled-src/wled00/
           cp wled-bambu/src/bambu_status.cpp      wled-src/wled00/
-          cp wled-bambu/src/wled_bambu_server.cpp wled-src/wled00/
 
           if [ -d wled-src/wled00/data ]; then
             cp wled-bambu/data/bambu.htm           wled-src/wled00/data/
@@ -41,10 +40,13 @@ jobs:
             cp wled-bambu/data/bambu_default.json  wled-src/data/
           fi
 
+          echo "--- Before patch ---"
+          grep -n "BambuUsermod\|registerUsermods" wled-src/wled00/usermods_list.cpp | head -5
+
           python3 wled-bambu/tools/patch_wled.py wled-src/wled00/
 
-          echo "--- Bambu files injected ---"
-          ls wled-src/wled00/ | grep bambu
+          echo "--- After patch ---"
+          grep -n "BambuUsermod\|registerUsermods" wled-src/wled00/usermods_list.cpp | head -10
 
       - name: Patch WLED platformio.ini
         working-directory: wled-src

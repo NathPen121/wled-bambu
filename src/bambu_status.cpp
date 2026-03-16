@@ -1,138 +1,144 @@
-// NOTE: Do NOT include <ArduinoJson.h> here!
-// wled.h already pulls in WLED's bundled ArduinoJson via AsyncJson-v6.h.
-// Including it again causes duplicate symbol errors.
 #include "wled.h"
 #include "bambu_status.h"
 
-const char* BAMBU_STATE_NAMES[BAMBU_STATE_COUNT] = {
+static const char* STATE_NAMES[BAMBU_STATE_COUNT] = {
   "printing","heating","cooling","idle","downloading","error"
 };
 
-String        bambu_ip        = "";
-bool          bambu_enabled   = false;
-unsigned long bambu_last_poll = 0;
-String        bambu_state     = "idle";
-BambuEffect   bambu_effects[BAMBU_STATE_COUNT];
-
-static String bambu_last_applied = "";
-static bool bambu_routes_registered = false;
-
-static int stateIndex(const String& s) {
-  for (int i = 0; i < BAMBU_STATE_COUNT; i++)
-    if (s == BAMBU_STATE_NAMES[i]) return i;
-  return 3;
+void BambuUsermod::setup() {
+  _defaultEffects();
+  // Routes registered in loop() after server is ready
 }
 
-void pollBambu() {
-  // Register web routes once, after WLED has fully initialized the server
-  if (!bambu_routes_registered) {
-    setupBambuWebRoutes();
-    bambu_routes_registered = true;
+void BambuUsermod::loop() {
+  if (!_routesDone) {
+    _registerRoutes();
+    _routesDone = true;
   }
+  _poll();
+  _applyEffect();
+}
 
-  if (!bambu_enabled || bambu_ip.length() < 7) return;
-  if (millis() - bambu_last_poll < 2000) return;
-  bambu_last_poll = millis();
+void BambuUsermod::_registerRoutes() {
+  server.on("/bambu", HTTP_GET, [this](AsyncWebServerRequest* req) {
+    req->send(WLED_FS, "/bambu.htm", "text/html");
+  });
+
+  server.on("/bambu/status", HTTP_GET, [this](AsyncWebServerRequest* req) {
+    String json = "{\"state\":\"" + _state + "\",\"ip\":\"" + _ip + "\",\"enabled\":" + (_enabled?"true":"false") + "}";
+    req->send(200, "application/json", json);
+  });
+
+  server.on("/bambu/config", HTTP_POST,
+    [](AsyncWebServerRequest* req){},
+    NULL,
+    [this](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t, size_t) {
+      DynamicJsonDocument doc(512);
+      if (!deserializeJson(doc, data, len)) {
+        if (doc.containsKey("ip"))      _ip      = doc["ip"].as<String>();
+        if (doc.containsKey("enabled")) _enabled = doc["enabled"].as<bool>();
+        serializeConfig();
+      }
+      req->send(200, "application/json", "{\"ok\":true}");
+    }
+  );
+}
+
+void BambuUsermod::_poll() {
+  if (!_enabled || _ip.length() < 7) return;
+  if (millis() - _lastPoll < 2000) return;
+  _lastPoll = millis();
 
   WiFiClient client;
-  if (!client.connect(bambu_ip.c_str(), 80)) return;
+  if (!client.connect(_ip.c_str(), 80)) return;
 
   client.println("GET /server/info HTTP/1.1");
-  client.print("Host: "); client.println(bambu_ip);
+  client.print("Host: "); client.println(_ip);
   client.println("Connection: close");
   client.println();
 
   String payload = "";
-  unsigned long timeout = millis();
+  unsigned long t = millis();
   while (client.connected() || client.available()) {
-    if (millis() - timeout > 3000) break;
-    while (client.available()) {
-      payload += char(client.read());
-      timeout = millis();
-    }
+    if (millis() - t > 3000) break;
+    while (client.available()) { payload += char(client.read()); t = millis(); }
     delay(1);
   }
   client.stop();
 
-  int bodyIndex = payload.indexOf("\r\n\r\n");
-  if (bodyIndex < 0) return;
-  String json = payload.substring(bodyIndex + 4);
+  int body = payload.indexOf("\r\n\r\n");
+  if (body < 0) return;
 
   DynamicJsonDocument doc(1024);
-  if (deserializeJson(doc, json)) return;
+  if (deserializeJson(doc, payload.substring(body + 4))) return;
   if (!doc.containsKey("print")) return;
 
   JsonObject pr = doc["print"];
-  String state = pr["gcode_state"] | "IDLE";
-  state.toLowerCase();
+  String s = pr["gcode_state"] | "IDLE";
+  s.toLowerCase();
 
-  if      (state == "running")  bambu_state = "printing";
-  else if (state == "prepare")  bambu_state = "heating";
-  else if (state == "pause")    bambu_state = "heating";
-  else if (state == "finish")   bambu_state = "idle";
-  else if (state == "failed")   bambu_state = "error";
-  else if (state == "slicing")  bambu_state = "downloading";
-  else                          bambu_state = "idle";
+  if      (s == "running")  _state = "printing";
+  else if (s == "prepare")  _state = "heating";
+  else if (s == "pause")    _state = "heating";
+  else if (s == "finish")   _state = "idle";
+  else if (s == "failed")   _state = "error";
+  else if (s == "slicing")  _state = "downloading";
+  else                      _state = "idle";
 
   float hotend = pr["nozzle_temper"] | 0.0f;
-  if (bambu_state == "idle" && hotend > 40.0f) bambu_state = "heating";
+  if (_state == "idle" && hotend > 40.0f) _state = "heating";
 }
 
-void applyBambuEffects() {
-  if (!bambu_enabled) return;
-  if (bambu_state == bambu_last_applied) return;
-  bambu_last_applied = bambu_state;
+void BambuUsermod::_applyEffect() {
+  if (!_enabled) return;
+  if (_state == _lastApplied) return;
+  _lastApplied = _state;
 
-  int idx = stateIndex(bambu_state);
-  BambuEffect* fx = &bambu_effects[idx];
+  int idx = _stateIndex(_state);
+  BambuEffect* fx = &_fx[idx];
 
   Segment& seg = strip.getSegment(0);
   seg.setOption(SEG_OPTION_ON, true);
   seg.mode      = fx->fx;
   seg.speed     = fx->speed;
   seg.intensity = fx->intensity;
-  seg.colors[0] = ((uint32_t)fx->col[0]  << 16)
-                | ((uint32_t)fx->col[1]  <<  8)
-                |  (uint32_t)fx->col[2];
-  seg.colors[1] = ((uint32_t)fx->col2[0] << 16)
-                | ((uint32_t)fx->col2[1] <<  8)
-                |  (uint32_t)fx->col2[2];
-
+  seg.colors[0] = ((uint32_t)fx->col[0] << 16) | ((uint32_t)fx->col[1] << 8) | fx->col[2];
+  seg.colors[1] = ((uint32_t)fx->col2[0] << 16) | ((uint32_t)fx->col2[1] << 8) | fx->col2[2];
   colorUpdated(CALL_MODE_DIRECT_CHANGE);
 }
 
-void loadDefaultBambuEffects() {
-  bambu_effects[0] = {2,  {255,255,255}, {0,0,0}, 128, 128, 0};
-  bambu_effects[1] = {2,  {255,120,  0}, {0,0,0}, 200, 200, 0};
-  bambu_effects[2] = {2,  {  0, 50,255}, {0,0,0}, 100, 100, 0};
-  bambu_effects[3] = {0,  {255,200,150}, {0,0,0},   0,   0, 0};
-  bambu_effects[4] = {15, {  0,255,200}, {0,0,0}, 128, 128, 0};
-  bambu_effects[5] = {2,  {255,  0,  0}, {0,0,0}, 255, 255, 0};
+int BambuUsermod::_stateIndex(const String& s) {
+  for (int i = 0; i < BAMBU_STATE_COUNT; i++)
+    if (s == STATE_NAMES[i]) return i;
+  return 3;
+}
 
-  File f = WLED_FS.open("/bambu.json", "r");
-  if (!f) return;
+void BambuUsermod::_defaultEffects() {
+  _fx[0] = {2,  {255,255,255}, {0,0,0}, 128, 128, 0}; // printing
+  _fx[1] = {2,  {255,120,  0}, {0,0,0}, 200, 200, 0}; // heating
+  _fx[2] = {2,  {  0, 50,255}, {0,0,0}, 100, 100, 0}; // cooling
+  _fx[3] = {0,  {255,200,150}, {0,0,0},   0,   0, 0}; // idle
+  _fx[4] = {15, {  0,255,200}, {0,0,0}, 128, 128, 0}; // downloading
+  _fx[5] = {2,  {255,  0,  0}, {0,0,0}, 255, 255, 0}; // error
+}
 
-  DynamicJsonDocument doc(2048);
-  if (deserializeJson(doc, f)) { f.close(); return; }
-  f.close();
+void BambuUsermod::addToJsonInfo(JsonObject& root) {
+  JsonObject user = root["u"];
+  if (user.isNull()) user = root.createNestedObject("u");
+  JsonArray arr = user.createNestedArray("Bambu");
+  arr.add(_state);
+}
 
-  if (doc.containsKey("ip"))      bambu_ip      = doc["ip"].as<String>();
-  if (doc.containsKey("enabled")) bambu_enabled = doc["enabled"].as<bool>();
-  if (!doc.containsKey("effects")) return;
+void BambuUsermod::addToConfig(JsonObject& root) {
+  JsonObject top = root.createNestedObject("Bambu");
+  top["ip"]      = _ip;
+  top["enabled"] = _enabled;
+}
 
-  JsonObject effects = doc["effects"];
-  for (int i = 0; i < BAMBU_STATE_COUNT; i++) {
-    if (!effects.containsKey(BAMBU_STATE_NAMES[i])) continue;
-    JsonObject e = effects[BAMBU_STATE_NAMES[i]];
-    bambu_effects[i].fx        = e["fx"]        | bambu_effects[i].fx;
-    bambu_effects[i].col[0]    = e["col"][0]    | bambu_effects[i].col[0];
-    bambu_effects[i].col[1]    = e["col"][1]    | bambu_effects[i].col[1];
-    bambu_effects[i].col[2]    = e["col"][2]    | bambu_effects[i].col[2];
-    bambu_effects[i].col2[0]   = e["col2"][0]   | bambu_effects[i].col2[0];
-    bambu_effects[i].col2[1]   = e["col2"][1]   | bambu_effects[i].col2[1];
-    bambu_effects[i].col2[2]   = e["col2"][2]   | bambu_effects[i].col2[2];
-    bambu_effects[i].speed     = e["speed"]     | bambu_effects[i].speed;
-    bambu_effects[i].intensity = e["intensity"] | bambu_effects[i].intensity;
-    bambu_effects[i].duration  = e["duration"]  | bambu_effects[i].duration;
-  }
+bool BambuUsermod::readFromConfig(JsonObject& root) {
+  JsonObject top = root["Bambu"];
+  if (top.isNull()) return false;
+  _ip      = top["ip"]      | _ip;
+  _enabled = top["enabled"] | _enabled;
+  return true;
 }
