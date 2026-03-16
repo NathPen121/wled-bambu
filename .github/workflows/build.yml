@@ -52,7 +52,13 @@ jobs:
 
       - name: Patch WLED platformio.ini
         working-directory: wled-src
-        run: python3 ../wled-bambu/tools/patch_platformio.py
+        run: |
+          sed -i 's/-Wshadow=compatible-local//g' platformio.ini
+          python3 ../wled-bambu/tools/patch_platformio.py
+          echo "  knolleary/PubSubClient@^2.8" >> platformio.ini
+          echo "  -DMQTT_MAX_PACKET_SIZE=4096" >> platformio.ini
+          echo "Patched platformio.ini"
+          tail -5 platformio.ini
 
       - name: Set up Python
         uses: actions/setup-python@v5
