@@ -21,7 +21,7 @@ public:
   void addToJsonInfo(JsonObject& root) override;
   void addToConfig(JsonObject& root) override;
   bool readFromConfig(JsonObject& root) override;
-  uint16_t getId() override { return 0xB4B0; // "BABO" - unique Bambu usermod ID }
+  uint16_t getId() override { return 0xB4B0; } // "BABO" - unique Bambu usermod ID
 
   // Static callback - PubSubClient doesn't support std::function
   static void mqttCallback(char* topic, byte* payload, unsigned int len);

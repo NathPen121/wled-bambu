@@ -132,7 +132,7 @@ void BambuUsermod::loop() {
 void BambuUsermod::_registerRoutes() {
   // Serve embedded HTML
   server.on("/bambu", HTTP_GET, [](AsyncWebServerRequest* req) {
-    AsyncWebServerResponse* resp = req->beginResponse_P(200, "text/html", (PGM_P)BAMBU_HTML, strlen_P(BAMBU_HTML));
+    AsyncWebServerResponse* resp = req->beginResponse_P(200, "text/html", (const uint8_t*)BAMBU_HTML, strlen_P(BAMBU_HTML));
     req->send(resp);
   });
 
