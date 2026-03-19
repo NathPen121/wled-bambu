@@ -270,10 +270,10 @@ void BambuUsermod::_applyEffect() {
   effectSpeed     = fx->speed;
   effectIntensity = fx->intensity;
 
-  colPri[0] = fx->col[0];
-  colPri[1] = fx->col[1];
-  colPri[2] = fx->col[2];
-  colPri[3] = 0;
+  col[0] = fx->col[0];
+  col[1] = fx->col[1];
+  col[2] = fx->col[2];
+  col[3] = 0;
 
   colSec[0] = fx->col2[0];
   colSec[1] = fx->col2[1];
