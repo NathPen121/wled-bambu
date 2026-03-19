@@ -272,7 +272,7 @@ void BambuUsermod::_applyEffect() {
               |  (uint32_t)fx->col2[2];
 
   // Apply to segment 0 - confirmed API from kno.wled.ge
-  WS2812FX::Segment& seg = strip.getSegment(0);
+  Segment& seg = strip.getSegment(0);
   seg.mode      = fx->fx;
   seg.speed     = fx->speed;
   seg.intensity = fx->intensity;
