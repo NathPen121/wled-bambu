@@ -264,23 +264,28 @@ void BambuUsermod::_applyEffect() {
   int idx = _stateIndex(_state);
   BambuEffect* fx = &_fx[idx];
 
-  uint32_t c1 = ((uint32_t)fx->col[0]  << 16)
-              | ((uint32_t)fx->col[1]  <<  8)
-              |  (uint32_t)fx->col[2];
-  uint32_t c2 = ((uint32_t)fx->col2[0] << 16)
-              | ((uint32_t)fx->col2[1] <<  8)
-              |  (uint32_t)fx->col2[2];
+  // Use deserializeState - same as /json/state API, goes through
+  // WLED's own state machine so changes persist
+  StaticJsonDocument<512> doc;
+  JsonObject root = doc.to<JsonObject>();
+  root["on"]  = true;
+  root["bri"] = briLast > 0 ? briLast : 128;
 
-  // Apply to segment 0 - confirmed API from kno.wled.ge
-  Segment& seg = strip.getSegment(0);
-  seg.mode      = fx->fx;
-  seg.speed     = fx->speed;
-  seg.intensity = fx->intensity;
-  seg.colors[0] = c1;
-  seg.colors[1] = c2;
+  JsonArray segs = root.createNestedArray("seg");
+  JsonObject s = segs.createNestedObject();
+  s["id"]  = 0;
+  s["on"]  = true;
+  s["fx"]  = fx->fx;
+  s["sx"]  = fx->speed;
+  s["ix"]  = fx->intensity;
 
-  // colorUpdated(1) triggers re-render - confirmed from WLED wiki
-  colorUpdated(CALL_MODE_DIRECT_CHANGE);
+  JsonArray col = s.createNestedArray("col");
+  JsonArray c1 = col.createNestedArray();
+  c1.add(fx->col[0]); c1.add(fx->col[1]); c1.add(fx->col[2]);
+  JsonArray c2 = col.createNestedArray();
+  c2.add(fx->col2[0]); c2.add(fx->col2[1]); c2.add(fx->col2[2]);
+
+  deserializeState(root);
 }
 
 int BambuUsermod::_stateIndex(const String& s) {
