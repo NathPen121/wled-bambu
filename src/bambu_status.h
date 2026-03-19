@@ -34,6 +34,7 @@ public:
 
 private:
   bool _routesDone = false;
+  bool _dirty = false;
 
   void _registerRoutes();
   void _applyEffect();

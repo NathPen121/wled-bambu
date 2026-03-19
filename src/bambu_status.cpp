@@ -158,6 +158,11 @@ void BambuUsermod::loop() {
     _registerRoutes();
     _routesDone = true;
   }
+  // Apply effect from main loop - never from async callbacks
+  if (_dirty) {
+    _dirty = false;
+    _applyEffect();
+  }
 }
 
 void BambuUsermod::_registerRoutes() {
@@ -199,9 +204,11 @@ void BambuUsermod::_registerRoutes() {
     if (!self) { req->send(500); return; }
     if (req->hasParam("v")) {
       self->_state = req->getParam("v")->value();
-      self->_applyEffect();
+      self->_dirty = true;  // signal main loop to apply effect
+      req->send(200, "text/plain", "OK:" + self->_state);
+    } else {
+      req->send(200, "text/plain", "OK");
     }
-    req->send(200, "text/plain", "OK");
   });
 
   // POST /bambu/config - save config
@@ -247,9 +254,7 @@ void BambuUsermod::_registerRoutes() {
       }
 
       serializeConfig();
-      // Force effect update
-      self->_state = self->_state; // touch to trigger reapply
-      self->_applyEffect();
+      self->_dirty = true;  // apply from main loop
       req->send(200, "text/plain", "OK");
     }
   );
@@ -259,22 +264,23 @@ void BambuUsermod::_applyEffect() {
   int idx = _stateIndex(_state);
   BambuEffect* fx = &_fx[idx];
 
-  // Use WLED's JSON API to set effect - most compatible approach
-  // This is how usermods are supposed to change effects in WLED 0.15
-  DynamicJsonDocument doc(256);
-  JsonObject seg0 = doc.createNestedObject("seg");
-  seg0["fx"]  = fx->fx;
-  seg0["sx"]  = fx->speed;     // speed
-  seg0["ix"]  = fx->intensity; // intensity
-  seg0["on"]  = true;
-  // Colors as 24-bit packed values
-  JsonArray col = seg0.createNestedArray("col");
-  JsonArray c1 = col.createNestedArray();
-  c1.add(fx->col[0]); c1.add(fx->col[1]); c1.add(fx->col[2]);
-  JsonArray c2 = col.createNestedArray();
-  c2.add(fx->col2[0]); c2.add(fx->col2[1]); c2.add(fx->col2[2]);
+  uint32_t c1 = ((uint32_t)fx->col[0]  << 16)
+              | ((uint32_t)fx->col[1]  <<  8)
+              |  (uint32_t)fx->col[2];
+  uint32_t c2 = ((uint32_t)fx->col2[0] << 16)
+              | ((uint32_t)fx->col2[1] <<  8)
+              |  (uint32_t)fx->col2[2];
 
-  deserializeState(doc.as<JsonObject>());
+  // Apply to segment 0 - confirmed API from kno.wled.ge
+  WS2812FX::Segment& seg = strip.getSegment(0);
+  seg.mode      = fx->fx;
+  seg.speed     = fx->speed;
+  seg.intensity = fx->intensity;
+  seg.colors[0] = c1;
+  seg.colors[1] = c2;
+
+  // colorUpdated(1) triggers re-render - confirmed from WLED wiki
+  colorUpdated(CALL_MODE_DIRECT_CHANGE);
 }
 
 int BambuUsermod::_stateIndex(const String& s) {
