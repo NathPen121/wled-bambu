@@ -27,7 +27,7 @@ public:
   static void mqttCallback(char* topic, byte* payload, unsigned int len);
   static BambuUsermod* instance;
 
-private:
+  // Public so static body handler can access them
   String        _ip        = "";
   String        _ac        = "";
   String        _sn        = "";

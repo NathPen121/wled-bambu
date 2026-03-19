@@ -145,39 +145,42 @@ void BambuUsermod::_registerRoutes() {
     req->send(200, "application/json", json);
   });
 
-  server.on("/bambu/config", HTTP_POST,
-    [](AsyncWebServerRequest* req){},
-    NULL,
-    [this](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t, size_t) {
-      DynamicJsonDocument doc(4096);
-      if (!deserializeJson(doc, data, len)) {
-        if (doc.containsKey("ip"))      _ip      = doc["ip"].as<String>();
-        if (doc.containsKey("ac"))      _ac      = doc["ac"].as<String>();
-        if (doc.containsKey("sn"))      _sn      = doc["sn"].as<String>();
-        if (doc.containsKey("enabled")) _enabled = doc["enabled"].as<bool>();
-        // Load per-state effects
-        if (doc.containsKey("effects")) {
-          JsonObject effects = doc["effects"];
-          for (int i = 0; i < BAMBU_STATE_COUNT; i++) {
-            if (!effects.containsKey(STATE_NAMES[i])) continue;
-            JsonObject e = effects[STATE_NAMES[i]];
-            _fx[i].fx        = e["fx"]        | _fx[i].fx;
-            _fx[i].col[0]    = e["col"][0]    | _fx[i].col[0];
-            _fx[i].col[1]    = e["col"][1]    | _fx[i].col[1];
-            _fx[i].col[2]    = e["col"][2]    | _fx[i].col[2];
-            _fx[i].col2[0]   = e["col2"][0]   | _fx[i].col2[0];
-            _fx[i].col2[1]   = e["col2"][1]   | _fx[i].col2[1];
-            _fx[i].col2[2]   = e["col2"][2]   | _fx[i].col2[2];
-            _fx[i].speed     = e["speed"]     | _fx[i].speed;
-            _fx[i].intensity = e["intensity"] | _fx[i].intensity;
-          }
-        }
-        serializeConfig();
-        _lastPoll = 0; // trigger reconnect on next poll tick
+  // POST /bambu/config - use a proper body handler
+  AsyncCallbackWebHandler* handler = new AsyncCallbackWebHandler();
+  handler->setUri("/bambu/config");
+  handler->setMethod(HTTP_POST);
+  handler->onRequest([](AsyncWebServerRequest* req) {
+    req->send(200, "text/plain", "OK");
+  });
+  handler->onBody([](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
+    BambuUsermod* self = BambuUsermod::instance;
+    if (!self) return;
+    DynamicJsonDocument doc(4096);
+    if (deserializeJson(doc, data, len)) return;
+    if (doc.containsKey("ip"))      self->_ip      = doc["ip"].as<String>();
+    if (doc.containsKey("ac"))      self->_ac      = doc["ac"].as<String>();
+    if (doc.containsKey("sn"))      self->_sn      = doc["sn"].as<String>();
+    if (doc.containsKey("enabled")) self->_enabled = doc["enabled"].as<bool>();
+    if (doc.containsKey("effects")) {
+      JsonObject effects = doc["effects"];
+      for (int i = 0; i < BAMBU_STATE_COUNT; i++) {
+        if (!effects.containsKey(STATE_NAMES[i])) continue;
+        JsonObject e = effects[STATE_NAMES[i]];
+        self->_fx[i].fx        = e["fx"]        | self->_fx[i].fx;
+        self->_fx[i].col[0]    = e["col"][0]    | self->_fx[i].col[0];
+        self->_fx[i].col[1]    = e["col"][1]    | self->_fx[i].col[1];
+        self->_fx[i].col[2]    = e["col"][2]    | self->_fx[i].col[2];
+        self->_fx[i].col2[0]   = e["col2"][0]   | self->_fx[i].col2[0];
+        self->_fx[i].col2[1]   = e["col2"][1]   | self->_fx[i].col2[1];
+        self->_fx[i].col2[2]   = e["col2"][2]   | self->_fx[i].col2[2];
+        self->_fx[i].speed     = e["speed"]     | self->_fx[i].speed;
+        self->_fx[i].intensity = e["intensity"] | self->_fx[i].intensity;
       }
-      req->send(200, "text/plain", "OK");
     }
-  );
+    serializeConfig();
+    self->_lastPoll = 0;
+  });
+  server.addHandler(handler);
 }
 
 // ---- MQTT ----
