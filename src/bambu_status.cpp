@@ -158,7 +158,6 @@ void BambuUsermod::loop() {
     _registerRoutes();
     _routesDone = true;
   }
-  if (_enabled) _applyEffect();
 }
 
 void BambuUsermod::_registerRoutes() {
@@ -260,14 +259,22 @@ void BambuUsermod::_applyEffect() {
   int idx = _stateIndex(_state);
   BambuEffect* fx = &_fx[idx];
 
-  Segment& seg = strip.getSegment(0);
-  seg.setOption(SEG_OPTION_ON, true);
-  seg.mode      = fx->fx;
-  seg.speed     = fx->speed;
-  seg.intensity = fx->intensity;
-  seg.colors[0] = ((uint32_t)fx->col[0] << 16) | ((uint32_t)fx->col[1] << 8) | fx->col[2];
-  seg.colors[1] = ((uint32_t)fx->col2[0] << 16) | ((uint32_t)fx->col2[1] << 8) | fx->col2[2];
-  colorUpdated(CALL_MODE_DIRECT_CHANGE);
+  // Use WLED's JSON API to set effect - most compatible approach
+  // This is how usermods are supposed to change effects in WLED 0.15
+  DynamicJsonDocument doc(256);
+  JsonObject seg0 = doc.createNestedObject("seg");
+  seg0["fx"]  = fx->fx;
+  seg0["sx"]  = fx->speed;     // speed
+  seg0["ix"]  = fx->intensity; // intensity
+  seg0["on"]  = true;
+  // Colors as 24-bit packed values
+  JsonArray col = seg0.createNestedArray("col");
+  JsonArray c1 = col.createNestedArray();
+  c1.add(fx->col[0]); c1.add(fx->col[1]); c1.add(fx->col[2]);
+  JsonArray c2 = col.createNestedArray();
+  c2.add(fx->col2[0]); c2.add(fx->col2[1]); c2.add(fx->col2[2]);
+
+  deserializeState(doc.as<JsonObject>());
 }
 
 int BambuUsermod::_stateIndex(const String& s) {
