@@ -1,50 +1,41 @@
 #pragma once
 #include "wled.h"
-#include <WiFiClientSecure.h>
-#include <PubSubClient.h>
+
+// NOTE: No PubSubClient or WiFiClientSecure here.
+// ESP8266 with 80KB RAM cannot reliably run TLS MQTT alongside WLED.
+// State is set via the web UI manually, or via HTTP GET /bambu/set?state=printing
 
 #define BAMBU_STATE_COUNT 6
 
+extern const char* BAMBU_STATE_NAMES[BAMBU_STATE_COUNT];
+
 struct BambuEffect {
-  uint8_t  fx;
-  uint8_t  col[3];
-  uint8_t  col2[3];
-  uint8_t  speed;
-  uint8_t  intensity;
-  uint8_t  duration;
+  uint8_t fx;
+  uint8_t col[3];
+  uint8_t col2[3];
+  uint8_t speed;
+  uint8_t intensity;
 };
 
 class BambuUsermod : public Usermod {
 public:
-  void setup() override;
-  void loop() override;
-  void addToJsonInfo(JsonObject& root) override;
-  void addToConfig(JsonObject& root) override;
+  void setup()   override;
+  void loop()    override;
+  void addToJsonInfo(JsonObject& root)  override;
+  void addToConfig(JsonObject& root)    override;
   bool readFromConfig(JsonObject& root) override;
-  uint16_t getId() override { return 0xB4B0; } // "BABO" - unique Bambu usermod ID
+  uint16_t getId() override { return 0xB4B0; }
 
-  // Static callback - PubSubClient doesn't support std::function
-  static void mqttCallback(char* topic, byte* payload, unsigned int len);
   static BambuUsermod* instance;
 
-  // Public so static body handler can access them
-  String        _ip        = "";
-  String        _ac        = "";
-  String        _sn        = "";
-  bool          _enabled   = false;
-  unsigned long _lastPoll  = 0;
-  String        _state     = "idle";
-  String        _lastApplied = "";
-  bool          _routesDone = false;
-  BambuEffect   _fx[BAMBU_STATE_COUNT];
+  String      _state   = "idle";
+  bool        _enabled = false;
+  BambuEffect _fx[BAMBU_STATE_COUNT];
 
-  WiFiClientSecure _wifiClient;
-  PubSubClient     _mqttClient{_wifiClient};
+private:
+  bool _routesDone = false;
 
   void _registerRoutes();
-  void _mqttConnect();
-  void _mqttMessage(char* topic, byte* payload, unsigned int len);
-  void _poll();
   void _applyEffect();
   int  _stateIndex(const String& s);
   void _defaultEffects();

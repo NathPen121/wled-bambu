@@ -66,7 +66,7 @@ jobs:
 
       - name: Install PubSubClient library
         working-directory: wled-src
-        run: pio pkg install --environment nodemcuv2 --library "knolleary/PubSubClient@^2.8"
+        run: echo "No extra libs needed"
 
       - name: Cache PlatformIO
         uses: actions/cache@v4
