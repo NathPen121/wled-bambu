@@ -264,28 +264,26 @@ void BambuUsermod::_applyEffect() {
   int idx = _stateIndex(_state);
   BambuEffect* fx = &_fx[idx];
 
-  // Use deserializeState - same as /json/state API, goes through
-  // WLED's own state machine so changes persist
-  StaticJsonDocument<512> doc;
-  JsonObject root = doc.to<JsonObject>();
-  root["on"]  = true;
-  root["bri"] = briLast > 0 ? briLast : 128;
+  // Set WLED global state variables directly - same as what
+  // the WLED UI does when you pick an effect
+  effectCurrent   = fx->fx;
+  effectSpeed     = fx->speed;
+  effectIntensity = fx->intensity;
 
-  JsonArray segs = root.createNestedArray("seg");
-  JsonObject s = segs.createNestedObject();
-  s["id"]  = 0;
-  s["on"]  = true;
-  s["fx"]  = fx->fx;
-  s["sx"]  = fx->speed;
-  s["ix"]  = fx->intensity;
+  colPri[0] = fx->col[0];
+  colPri[1] = fx->col[1];
+  colPri[2] = fx->col[2];
+  colPri[3] = 0;
 
-  JsonArray col = s.createNestedArray("col");
-  JsonArray c1 = col.createNestedArray();
-  c1.add(fx->col[0]); c1.add(fx->col[1]); c1.add(fx->col[2]);
-  JsonArray c2 = col.createNestedArray();
-  c2.add(fx->col2[0]); c2.add(fx->col2[1]); c2.add(fx->col2[2]);
+  colSec[0] = fx->col2[0];
+  colSec[1] = fx->col2[1];
+  colSec[2] = fx->col2[2];
+  colSec[3] = 0;
 
-  deserializeState(root);
+  if (bri == 0) bri = briLast > 0 ? briLast : 128;
+
+  colorUpdated(CALL_MODE_DIRECT_CHANGE);
+  stateUpdated(CALL_MODE_DIRECT_CHANGE);
 }
 
 int BambuUsermod::_stateIndex(const String& s) {
