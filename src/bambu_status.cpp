@@ -131,8 +131,26 @@ async function save(){
 async function setState(){
   const s=document.getElementById('manstate').value;
   try{
+    // Tell our usermod about the state change
     await fetch('/bambu/state?v='+s);
     upd(s);
+    // Also directly call WLED's own API to change the LEDs immediately
+    const fx=(cfg.fx||{})[s]||{};
+    const payload={
+      on:true,
+      seg:[{
+        id:0,
+        fx:fx.fx||0,
+        sx:fx.speed||128,
+        ix:fx.intensity||128,
+        col:[fx.col||[255,255,255],fx.col2||[0,0,0]]
+      }]
+    };
+    await fetch('/json/state',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
     msg('State set to '+s,true);
   }catch(e){msg('Failed: '+e,false);}
 }
