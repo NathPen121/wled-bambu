@@ -346,8 +346,13 @@ void BambuUsermod::_defaultEffects() {
 void BambuUsermod::addToJsonInfo(JsonObject& root) {
   JsonObject user = root["u"];
   if (user.isNull()) user = root.createNestedObject("u");
-  JsonArray info = user.createNestedArray("Bambu");
-  info.add(_state);
+
+  // Show a clean single-line status
+  JsonArray status = user.createNestedArray("Bambu State");
+  status.add(_state);
+
+  JsonArray link = user.createNestedArray("Bambu Config");
+  link.add(F("<a href='/bambu' style='color:#00d4ff'>Open Bambu LED</a>"));
 }
 
 void BambuUsermod::addToConfig(JsonObject& root) {
