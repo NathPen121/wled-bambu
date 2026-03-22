@@ -276,10 +276,10 @@ void BambuUsermod::_applyEffect() {
   col[2] = fx->col[2];
   col[3] = 0;
 
-  col2[0] = fx->col2[0];
-  col2[1] = fx->col2[1];
-  col2[2] = fx->col2[2];
-  col2[3] = 0;
+  colSec[0] = fx->col2[0];
+  colSec[1] = fx->col2[1];
+  colSec[2] = fx->col2[2];
+  colSec[3] = 0;
 
   if (bri == 0) bri = 128;
 
