@@ -131,6 +131,8 @@ async function save(){
 async function setState(){
   const s=document.getElementById('manstate').value;
   try{
+    // Refresh config first so we have the latest effects
+    try{const r=await fetch('/bambu/status');const d=await r.json();cfg.fx=d.fx||cfg.fx||{};}catch(_){}
     // Tell our usermod about the state change
     await fetch('/bambu/state?v='+s);
     upd(s);
