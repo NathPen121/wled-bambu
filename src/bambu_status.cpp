@@ -75,7 +75,16 @@ const FX=[[0,"Solid"],[2,"Breathe"],[1,"Blink"],[12,"Fade"],[15,"Running"],
           [6,"Sweep"],[9,"Rainbow"],[17,"Twinkle"],[57,"Lightning"],
           [42,"Fireworks"],[88,"Candle"],[66,"Fire 2012"],[100,"Heartbeat"],
           [20,"Sparkle"],[48,"Police"],[76,"Meteor"]];
-let cfg={fx:{}};
+// Default effects shown immediately so grid is never empty
+const DEFAULTS={
+  printing:{fx:2,col:[255,255,255],col2:[0,0,0],speed:128,intensity:128},
+  heating: {fx:2,col:[255,120,0],  col2:[0,0,0],speed:200,intensity:200},
+  cooling: {fx:2,col:[0,50,255],   col2:[0,0,0],speed:100,intensity:100},
+  idle:    {fx:0,col:[255,200,150],col2:[0,0,0],speed:0,  intensity:0},
+  downloading:{fx:15,col:[0,255,200],col2:[0,0,0],speed:128,intensity:128},
+  error:   {fx:2,col:[255,0,0],    col2:[0,0,0],speed:255,intensity:255}
+};
+let cfg={fx:JSON.parse(JSON.stringify(DEFAULTS))};
 
 function msg(t,ok){const e=document.getElementById('msg');e.textContent=t;e.style.color=ok?'#0f0':'#f44';}
 function upd(s){const b=document.getElementById('st');b.textContent=s;b.className='badge '+s;}
@@ -86,7 +95,7 @@ function rgb(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parse
 function buildGrid(){
   const g=document.getElementById('grid');g.innerHTML='';
   STATES.forEach(s=>{
-    const e=(cfg.fx||{})[s]||{};
+    const e=(cfg.fx||{})[s]||DEFAULTS[s];
     const opts=FX.map(([id,n])=>`<option value="${id}"${(e.fx||0)==id?' selected':''}>${id}: ${n}</option>`).join('');
     g.innerHTML+=`<div class="sc ${s}"><h3>${s}</h3>
       <div class="row"><label>Effect</label><select id="${s}_fx">${opts}</select></div>
@@ -99,14 +108,26 @@ function buildGrid(){
 }
 
 async function load(){
-  try{
-    const r=await fetch('/bambu/status');
-    const d=await r.json();
-    document.getElementById('en').checked=d.enabled||false;
-    cfg.fx=d.fx||{};
-    upd(d.state||'idle');
-    buildGrid();
-  }catch(e){msg('Could not load - is device reachable?',false);}
+  // Build grid immediately with defaults so it's never blank
+  buildGrid();
+  // Then try to load saved config, retry a few times as routes may not be ready yet
+  for(let i=0;i<5;i++){
+    try{
+      const r=await fetch('/bambu/status');
+      if(!r.ok) throw new Error('not ok');
+      const d=await r.json();
+      document.getElementById('en').checked=d.enabled||false;
+      if(d.fx && Object.keys(d.fx).length>0){
+        cfg.fx=d.fx;
+        buildGrid();
+      }
+      upd(d.state||'idle');
+      return;
+    }catch(e){
+      await new Promise(r=>setTimeout(r,1000));
+    }
+  }
+  msg('Using defaults - could not reach /bambu/status',false);
 }
 
 async function save(){
