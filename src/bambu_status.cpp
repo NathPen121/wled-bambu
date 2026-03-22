@@ -264,8 +264,9 @@ void BambuUsermod::_applyEffect() {
   int idx = _stateIndex(_state);
   BambuEffect* fx = &_fx[idx];
 
-  // Set WLED global state variables directly - same as what
-  // the WLED UI does when you pick an effect
+  // Confirmed working pattern from WLED usermod examples:
+  // Set globals then call colorUpdated(CALL_MODE_DIRECT_CHANGE)
+  // Secondary color uses col2[] in WLED 0.15
   effectCurrent   = fx->fx;
   effectSpeed     = fx->speed;
   effectIntensity = fx->intensity;
@@ -275,15 +276,15 @@ void BambuUsermod::_applyEffect() {
   col[2] = fx->col[2];
   col[3] = 0;
 
-  colSec[0] = fx->col2[0];
-  colSec[1] = fx->col2[1];
-  colSec[2] = fx->col2[2];
-  colSec[3] = 0;
+  col2[0] = fx->col2[0];
+  col2[1] = fx->col2[1];
+  col2[2] = fx->col2[2];
+  col2[3] = 0;
 
-  if (bri == 0) bri = briLast > 0 ? briLast : 128;
+  if (bri == 0) bri = 128;
 
-  colorUpdated(CALL_MODE_DIRECT_CHANGE);
-  stateUpdated(CALL_MODE_DIRECT_CHANGE);
+  // Use literal 8 = CALL_MODE_DIRECT_CHANGE in WLED 0.15
+  colorUpdated(8);
 }
 
 int BambuUsermod::_stateIndex(const String& s) {
